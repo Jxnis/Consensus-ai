@@ -7,20 +7,31 @@ export class ConsensusMatcher {
     const s2 = this.normalize(b);
     
     if (s1 === s2) return 1.0;
-    if (s1.length === 0 || s2.length === 0) return 0;
-
-    // Jaccard Similarity of words
-    const words1 = new Set(s1.split(/\s+/));
-    const words2 = new Set(s2.split(/\s+/));
     
+    const words1 = this.tokenize(s1);
+    const words2 = this.tokenize(s2);
+    
+    if (words1.size === 0 || words2.size === 0) return 0;
+
     const intersection = new Set([...words1].filter(x => words2.has(x)));
     const union = new Set([...words1, ...words2]);
     
     return intersection.size / union.size;
   }
 
+  private static tokenize(text: string): Set<string> {
+    const stopWords = new Set(["the", "a", "an", "is", "are", "was", "were", "and", "or", "but", "of", "to", "in", "it"]);
+    return new Set(
+      text.split(/\s+/)
+        .filter(w => w.length > 2 && !stopWords.has(w))
+    );
+  }
+
   private static normalize(text: string): string {
-    return text.toLowerCase().replace(/[^\w\s]/g, "").trim();
+    return text.toLowerCase()
+      .replace(/[^\w\s]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 
   /**

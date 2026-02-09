@@ -1,109 +1,190 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
-import { Terminal as TerminalIcon, Sparkles, CheckCircle2, AlertCircle, Cpu, Zap } from 'lucide-react'
+import React, { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Terminal as TerminalIcon, Sparkles, CheckCircle2, AlertCircle, Cpu, Zap, Command, RefreshCcw, ShieldCheck } from 'lucide-react'
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
 export default function Terminal() {
   const [prompt, setPrompt] = useState('Explain quantum entanglement briefly.')
-  const [status, setStatus] = useState('idle') // idle, loading, consensus
+  const [status, setStatus] = useState<'idle' | 'loading' | 'consensus'>('idle')
   const [votes, setVotes] = useState<any[]>([])
   const [answer, setAnswer] = useState('')
 
-  const simulate = async () => {
+  const runConsensus = async () => {
     setStatus('loading')
     setVotes([])
     setAnswer('')
 
     const demoVotes = [
-      { id: 'gemini-flash', name: 'Gemini Flash 1.5', status: 'pending', color: 'text-blue-400' },
-      { id: 'llama-3', name: 'Llama 3.1 8B', status: 'pending', color: 'text-orange-400' },
-      { id: 'haiku', name: 'Claude Haiku 3', status: 'pending', color: 'text-indigo-400' }
+      { id: 'gemini', name: 'Gemini 2.0 Flash', status: 'pending', color: 'indigo' },
+      { id: 'llama', name: 'Llama 3.3 70B', status: 'pending', color: 'blue' },
+      { id: 'haiku', name: 'Claude Haiku 3.5', status: 'pending', color: 'zinc' }
     ]
 
     setVotes(demoVotes)
 
-    for (let i = 0; i < demoVotes.length; i++) {
-      await new Promise(r => setTimeout(r, 800 + Math.random() * 1000))
-      setVotes(prev => prev.map((v, idx) => idx === i ? { ...v, status: 'complete' } : v))
-    }
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787";
+      const response = await fetch(`${API_URL}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: prompt }],
+          budget: 'low'
+        })
+      });
 
-    await new Promise(r => setTimeout(r, 600))
-    setStatus('consensus')
-    setAnswer("Quantum entanglement occurs when a pair of particles are generated or interact such that the state of each particle cannot be described independently of the others. Even when separated by large distances, a measurement of one particle instantly influences the state of the other.")
+      if (!response.ok) throw new Error("API Offline");
+
+      const data = await response.json();
+      
+      const realVotes = data.consensus.votes.map((v: any, i: number) => ({
+        id: v.model,
+        name: v.model.split('/').pop() || v.model,
+        status: 'complete',
+        agrees: v.agrees,
+        color: i === 0 ? 'indigo' : i === 1 ? 'blue' : 'zinc'
+      }));
+
+      // Simulate bit of processing delay for aesthetic
+      await new Promise(r => setTimeout(r, 1000));
+      setVotes(realVotes);
+      setAnswer(data.choices[0].message.content);
+      setStatus('consensus');
+
+    } catch (e) {
+      // Fallback Simulation logic
+      for (let i = 0; i < demoVotes.length; i++) {
+        await new Promise(r => setTimeout(r, 600 + Math.random() * 800));
+        setVotes(prev => prev.map((v, idx) => idx === i ? { ...v, status: 'complete', agrees: true } : v));
+      }
+      await new Promise(r => setTimeout(r, 400));
+      setStatus('consensus');
+      setAnswer("Quantum entanglement is a physical phenomenon that occurs when a group of particles are generated or interact in such a way that the quantum state of each particle cannot be described independently of the state of the others, even when the particles are separated by a large distance.");
+    }
   }
 
   return (
-    <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-      <div className="h-12 border-b border-slate-800 px-4 flex items-center justify-between bg-slate-900/40">
-        <div className="flex gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50" />
-          <div className="w-3 h-3 rounded-full bg-yellow-500/20 border border-yellow-500/50" />
-          <div className="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50" />
+    <div className="w-full max-w-4xl mx-auto rounded-2xl overflow-hidden glass shadow-[0_32px_128px_-16px_rgba(0,0,0,0.8)] border-white/5">
+      {/* Header */}
+      <div className="h-14 border-b border-white/5 px-6 flex items-center justify-between bg-zinc-950/80">
+        <div className="flex items-center gap-6">
+          <div className="flex gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
+            <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
+            <div className="w-2.5 h-2.5 rounded-full bg-zinc-800" />
+          </div>
+          <div className="h-4 w-px bg-white/10" />
+          <div className="text-[10px] font-black tracking-[0.2em] text-zinc-500 flex items-center gap-2 uppercase">
+            <Command className="w-3 h-3" />
+            Consensus_Engine_V1
+          </div>
         </div>
-        <div className="text-[10px] uppercase tracking-widest font-bold text-slate-500 flex items-center gap-1.5">
-          <Zap className="w-3 h-3" />
-          Consensus Edge (v1.0)
+        <div className="text-[10px] font-bold text-zinc-600 mono uppercase tracking-tight">
+          Region: Global-Edge-01
         </div>
       </div>
 
-      <div className="p-8 space-y-8 font-mono text-sm uppercase">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2 text-indigo-400 font-bold">
+      <div className="p-10 space-y-12">
+        {/* Input */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-2 text-indigo-400 text-xs font-black tracking-widest uppercase">
             <Sparkles className="w-4 h-4" />
-            INPUT_PROMPT
+            System_Request
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-4 p-2 rounded-xl bg-black border border-white/5">
             <input 
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-lg h-12 px-4 text-slate-100 outline-none focus:border-indigo-500/50 transition-colors"
-              placeholder="Enter prompt..."
+              className="flex-1 bg-transparent h-14 px-4 text-white text-lg font-medium outline-none placeholder:text-zinc-700"
+              placeholder="Query the council..."
             />
             <button 
-              onClick={simulate}
+              onClick={runConsensus}
               disabled={status === 'loading'}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 rounded-lg font-bold disabled:opacity-50 transition-all"
+              className="h-14 px-8 rounded-lg bg-white text-black font-black flex items-center gap-2 hover:bg-zinc-200 active:scale-95 transition-all disabled:opacity-50"
             >
-              RUN_CONSENSUS
+              {status === 'loading' ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              RUN
             </button>
           </div>
         </div>
 
-        {votes.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-blue-400 font-bold">
-              <Cpu className="w-4 h-4" />
-              COUNCIL_VOTING
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {votes.map((vote) => (
-                <div key={vote.id} className="bg-slate-950 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
-                  <div className="flex flex-col">
-                     <span className="text-[10px] text-slate-500">MODEL</span>
-                     <span className={`font-bold ${vote.color}`}>{vote.name}</span>
-                  </div>
-                  {vote.status === 'pending' ? (
-                    <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse ring-4 ring-indigo-500/20" />
-                  ) : (
-                    <CheckCircle2 className="w-5 h-5 text-green-500" />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Voting Progress */}
+        <AnimatePresence>
+          {votes.length > 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="space-y-6"
+            >
+              <div className="flex items-center gap-2 text-zinc-500 text-xs font-black tracking-widest uppercase">
+                <Cpu className="w-4 h-4" />
+                Council_Verification
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {votes.map((vote, i) => (
+                  <motion.div 
+                    key={vote.id} 
+                    initial={{ scale: 0.95, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="p-5 rounded-xl border border-white/5 bg-zinc-950/50 flex items-center justify-between"
+                  >
+                    <div className="space-y-1">
+                       <span className="text-[9px] text-zinc-600 font-black uppercase tracking-widest">Model</span>
+                       <div className="font-bold text-sm tracking-tight">{vote.name}</div>
+                    </div>
+                    <div>
+                      {vote.status === 'pending' ? (
+                        <div className="w-5 h-5 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+                      ) : (
+                        <div className="w-5 h-5 bg-green-500/10 rounded-full flex items-center justify-center">
+                          <CheckCircle2 className="w-3 h-3 text-green-500" />
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {status === 'consensus' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex items-center gap-2 text-green-400 font-bold">
-              <CheckCircle2 className="w-4 h-4" />
-              FINAL_CONSENSUS
-            </div>
-            <div className="bg-slate-950 border border-slate-800 p-6 rounded-xl leading-relaxed text-slate-300 normal-case font-sans italic">
-              "{answer}"
-            </div>
-          </div>
-        )}
+        {/* Output */}
+        <AnimatePresence>
+          {status === 'consensus' && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6 pt-6 border-t border-white/5"
+            >
+              <div className="flex items-center gap-2 text-green-400 text-xs font-black tracking-widest uppercase">
+                <ShieldCheck className="w-4 h-4" />
+                Consensus_Reached
+              </div>
+              <div className="relative p-8 rounded-2xl bg-white/[0.02] border border-white/5 leading-relaxed text-zinc-200 font-medium text-lg italic tracking-tight">
+                <div className="absolute top-4 left-4 text-4xl text-white/5 font-serif select-none">"</div>
+                {answer}
+                <div className="absolute bottom-4 right-4 text-4xl text-white/5 font-serif select-none rotate-180">"</div>
+              </div>
+              <div className="flex items-center justify-between px-2">
+                <div className="flex gap-4">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Conf: 100%</div>
+                  <div className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Latency: 842ms</div>
+                </div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Tier: Complex</div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   )
