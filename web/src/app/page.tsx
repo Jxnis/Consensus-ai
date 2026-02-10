@@ -2,29 +2,46 @@
 
 import Navigation from '@/components/sections/Navigation';
 import HeroSection from '@/components/sections/HeroSection';
-import HowItWorksSection from '@/components/sections/HowItWorksSection';
+import StickyDashboardSection from '@/components/sections/StickyDashboardSection';
+import HowItWorksCarousel from '@/components/sections/HowItWorksCarousel';
 import TerminalSection from '@/components/sections/TerminalSection';
 import PlaygroundSection from '@/components/sections/PlaygroundSection';
-import PerformanceSection from '@/components/sections/PerformanceSection';
+import ExpandingStackedCards from '@/components/sections/ExpandingStackedCards';
 import PricingSection from '@/components/sections/PricingSection';
 import FooterSection from '@/components/sections/FooterSection';
-import SecuritySection from '@/components/sections/SecuritySection';
-import UseCasesSection from '@/components/sections/UseCasesSection';
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#f5f5f4] selection:bg-[#4F46E5]/20">
       <Navigation />
       
       <main>
+        {/* Airy Hero Section */}
         <HeroSection />
-        <HowItWorksSection />
-        <TerminalSection />
-        <PlaygroundSection />
-        <PerformanceSection />
-        <SecuritySection />
-        <UseCasesSection />
+        
+        {/* Parallax Expanding Dashboard */}
+        <StickyDashboardSection />
+        
+        {/* Feature Carousel (Phantom style) */}
+        <HowItWorksCarousel />
+        
+        {/* Stable Comparison Section */}
+        <div id="docs">
+          <TerminalSection />
+        </div>
+        
+        {/* Interactive Playground */}
+        <div id="products">
+          <PlaygroundSection />
+        </div>
+        
+        {/* Expanding Stacked Cards (Performance) */}
+        <ExpandingStackedCards />
+        
+        {/* Pricing */}
         <PricingSection />
+        
+        {/* Circular Reveal Footer */}
         <FooterSection />
       </main>
     </div>

@@ -1,129 +1,106 @@
-import { motion } from 'framer-motion';
-import { Cloud, ArrowRight, Github, Twitter, MessageCircle, Mail } from 'lucide-react';
+"use client";
 
-const FooterSection = () => {
+import { useRef } from "react";
+import { motion, useScroll, useTransform } from "motion/react";
+import { Cloud, Github, Twitter, MessageCircle, Mail, ArrowRight } from "lucide-react";
+
+export const FooterSection = () => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start end", "end end"],
+  });
+
+  // Circular reveal effect
+  const clipPath = useTransform(
+    scrollYProgress,
+    [0, 1],
+    ["circle(0% at 50% 100%)", "circle(150% at 50% 100%)"]
+  );
+
+  // Text color fade from grey to white
+  const textColor = useTransform(scrollYProgress, [0.5, 1], ["#9ca3af", "#ffffff"]);
+
   const footerLinks = {
     Product: ['Features', 'Pricing', 'Changelog', 'Roadmap'],
-    Developers: ['Documentation', 'API Reference', 'SDKs', 'Status'],
+    Developers: ['Documentations', 'API Reference', 'SDKs', 'Status'],
     Company: ['About', 'Blog', 'Careers', 'Contact'],
-    Legal: ['Privacy', 'Terms', 'Security'],
   };
 
-  const socialLinks = [
-    { icon: Github, href: '#', label: 'GitHub' },
-    { icon: Twitter, href: '#', label: 'Twitter' },
-    { icon: MessageCircle, href: '#', label: 'Discord' },
-    { icon: Mail, href: '#', label: 'Email' },
-  ];
-
   return (
-    <footer className="bg-dark text-white">
-      {/* CTA Section */}
-      <div className="section pb-16">
-        <div className="container-custom">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: '-100px' }}
-            transition={{ duration: 0.5 }}
-            className="text-center max-w-2xl mx-auto"
-          >
-            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 tracking-tight">
-              Ship answers you can <span className="text-gradient">trust</span>
-            </h2>
-            <p className="text-lg text-gray-400 mb-8">
-              Get an API key and integrate consensus in minutes.
-            </p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <a
-                href="#get-started"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white font-semibold rounded-full hover:bg-primary-hover transition-colors"
-              >
-                Get started
-                <ArrowRight className="w-4 h-4" />
-              </a>
-              <a
-                href="#contact"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-white/10 text-white font-semibold rounded-full hover:bg-white/20 transition-colors"
-              >
-                Talk to sales
-              </a>
-            </div>
-          </motion.div>
-        </div>
-      </div>
+    <div ref={containerRef} id="footer" className="relative h-[150vh] bg-white">
+      <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
+        <motion.div
+           style={{ clipPath }}
+           className="absolute inset-0 bg-[#4F46E5] rounded-t-[80px] md:rounded-t-[120px] mx-4"
+        />
 
-      {/* Footer Links */}
-      <div className="border-t border-white/10">
-        <div className="container-custom py-16">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 lg:gap-12">
-            {/* Logo Column */}
-            <div className="col-span-2 md:col-span-1">
-              <a href="#" className="flex items-center gap-2 mb-4">
-                <div className="relative w-8 h-8 flex items-center justify-center">
-                  <div className="absolute inset-0 bg-primary/20 rounded-lg" />
-                  <Cloud className="w-5 h-5 text-primary relative z-10" />
-                </div>
-                <span className="font-bold text-lg">ConsensusCloud</span>
-              </a>
-              <p className="text-sm text-gray-400 mb-6">
-                One prompt. Multiple models. Verified answers.
+        <motion.div 
+            style={{ color: textColor }}
+            className="relative z-10 w-full max-w-7xl mx-auto px-8 py-20"
+        >
+          <div className="grid lg:grid-cols-2 gap-20 items-end">
+            <div>
+              <h2 className="text-6xl md:text-8xl font-bold tracking-tighter mb-12 leading-[0.85]">
+                JOIN THE 
+                <br />
+                COUNCIL.
+              </h2>
+              <p className="text-2xl font-medium max-w-md opacity-80 mb-12">
+                The world's first decentralized intelligence arbitrage network. Built for the agentic era.
               </p>
-              <div className="flex items-center gap-3">
-                {socialLinks.map((social) => (
-                  <a
-                    key={social.label}
-                    href={social.href}
-                    className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all"
-                    aria-label={social.label}
-                  >
-                    <social.icon className="w-4 h-4" />
-                  </a>
-                ))}
+
+              <div className="flex flex-wrap gap-4">
+                 <div className="flex-1 min-w-[300px] relative">
+                    <input 
+                      type="email" 
+                      placeholder="Enter your email"
+                      className="w-full h-20 bg-white/10 border border-white/20 rounded-full px-8 text-white placeholder:text-white/40 outline-none focus:bg-white/20 transition-all text-xl font-medium"
+                    />
+                    <button className="absolute right-3 top-3 bottom-3 px-8 bg-white text-[#4F46E5] rounded-full font-bold text-lg hover:scale-105 transition-transform flex items-center gap-2">
+                       Join <ArrowRight className="w-5 h-5" />
+                    </button>
+                 </div>
               </div>
             </div>
 
-            {/* Link Columns */}
-            {Object.entries(footerLinks).map(([category, links]) => (
-              <div key={category}>
-                <h4 className="font-semibold text-white mb-4">{category}</h4>
-                <ul className="space-y-3">
-                  {links.map((link) => (
-                    <li key={link}>
-                      <a
-                        href="#"
-                        className="text-sm text-gray-400 hover:text-white transition-colors"
-                      >
-                        {link}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Bar */}
-      <div className="border-t border-white/10">
-        <div className="container-custom py-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-sm text-gray-500">
-              © {new Date().getFullYear()} ConsensusCloud. All rights reserved.
-            </p>
-            <div className="flex items-center gap-6">
-              <a href="#" className="text-sm text-gray-500 hover:text-white transition-colors">
-                Privacy Policy
-              </a>
-              <a href="#" className="text-sm text-gray-500 hover:text-white transition-colors">
-                Terms of Service
-              </a>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-12">
+               {Object.entries(footerLinks).map(([category, links]) => (
+                <div key={category}>
+                   <h4 className="font-bold text-white mb-6 uppercase tracking-widest text-sm opacity-50">{category}</h4>
+                   <ul className="space-y-4">
+                     {links.map(link => (
+                       <li key={link}>
+                         <a href="#" className="text-lg font-medium hover:text-white transition-colors opacity-80 hover:opacity-100">{link}</a>
+                       </li>
+                     ))}
+                   </ul>
+                </div>
+               ))}
             </div>
           </div>
-        </div>
+
+          <div className="mt-40 pt-12 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-8">
+             <div className="flex items-center gap-3">
+                <Cloud className="w-8 h-8 text-white" />
+                <span className="text-2xl font-bold text-white">ConsensusCloud</span>
+             </div>
+
+             <div className="flex items-center gap-8">
+                <a href="#" className="hover:scale-125 transition-transform"><Twitter className="w-6 h-6" /></a>
+                <a href="#" className="hover:scale-125 transition-transform"><Github className="w-6 h-6" /></a>
+                <a href="#" className="hover:scale-125 transition-transform"><MessageCircle className="w-6 h-6" /></a>
+                <a href="#" className="hover:scale-125 transition-transform"><Mail className="w-6 h-6" /></a>
+             </div>
+
+             <p className="text-sm opacity-50 font-medium">
+               © {new Date().getFullYear()} ConsensusCloud. All rights reserved.
+             </p>
+          </div>
+        </motion.div>
       </div>
-    </footer>
+    </div>
   );
 };
 

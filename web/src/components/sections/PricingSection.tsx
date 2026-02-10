@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Check, ArrowRight, Rocket, Zap, Building2 } from 'lucide-react';
 
 const PricingSection = () => {
@@ -61,7 +61,7 @@ const PricingSection = () => {
   ];
 
   return (
-    <section id="pricing" className="section bg-gray-100">
+    <section id="pricing" className="section bg-[#f9fafb]">
       <div className="container-custom">
         {/* Header */}
         <motion.div

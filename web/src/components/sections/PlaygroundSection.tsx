@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Send, Loader2, CheckCircle2, Brain, MessageSquare, Zap, Cpu, Sparkles, Shield } from 'lucide-react';
 
 interface ModelResponse {
@@ -66,7 +66,7 @@ const PlaygroundSection = () => {
   };
 
   return (
-    <section id="products" className="section bg-white">
+    <section id="products" className="section bg-[#f9fafb]">
       <div className="container-custom">
         {/* Header */}
         <motion.div

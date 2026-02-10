@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { Terminal, Clock, CheckCircle2 } from 'lucide-react';
 
 const TerminalSection = () => {
@@ -25,7 +25,7 @@ const TerminalSection = () => {
 }`;
 
   return (
-    <section className="section bg-gray-100">
+    <section className="section bg-white text-[#111827]">
       <div className="container-custom">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left side - Content */}
@@ -107,7 +107,7 @@ const TerminalSection = () => {
               </div>
 
               {/* Terminal Content */}
-              <div className="p-6 bg-white">
+              <div className="p-6 bg-white min-h-[460px]">
                 {/* Prompt */}
                 <div className="mb-4 font-mono text-sm">
                   <span className="text-primary">$</span>{' '}
