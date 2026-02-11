@@ -16,7 +16,9 @@ app.use("*", cors());
 app.use("/v1/*", async (c, next) => {
   // 1. Skip if bypass key or non-payment required route
   const authHeader = c.req.header("Authorization");
-  if (authHeader?.startsWith("Bearer sk_")) return await next();
+  const isLocalhost = c.req.header("Origin")?.includes("localhost") || c.req.header("Host")?.includes("localhost");
+  
+  if (authHeader?.startsWith("Bearer sk_") || isLocalhost) return await next();
 
   // 2. Check x402 Headers
   const signature = c.req.header("X-402-Signature") as `0x${string}`;
