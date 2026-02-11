@@ -46,23 +46,55 @@ app.use("/v1/*", async (c, next) => {
   await next();
 });
 
+// Rate Limiting Middleware (100 requests per hour per IP)
+app.use("/v1/*", async (c, next) => {
+  const clientIP = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
+  const key = `ratelimit:${clientIP}`;
+  
+  const current = await c.env.CONSENSUS_CACHE.get(key);
+  const count = current ? parseInt(current) : 0;
+  
+  if (count >= 100) {
+    return c.json({ error: "Rate limit exceeded. Max 100 requests per hour." }, 429);
+  }
+  
+  await c.env.CONSENSUS_CACHE.put(key, String(count + 1), { expirationTtl: 3600 });
+  await next();
+});
+
 // OpenAI compatible completions endpoint
 app.post("/v1/chat/completions", async (c) => {
   const body = await c.req.json();
   const prompt = body.messages?.[body.messages.length - 1]?.content || "";
   
+  // Input validation
   if (!prompt) {
     return c.json({ error: "No prompt provided" }, 400);
   }
 
+  if (typeof prompt !== 'string') {
+    return c.json({ error: "Prompt must be a string" }, 400);
+  }
+
+  if (prompt.length > 8000) {
+    return c.json({ error: "Prompt exceeds maximum length of 8000 characters" }, 400);
+  }
+
+  // Sanitize prompt (remove null bytes and excessive whitespace)
+  const sanitizedPrompt = prompt.replace(/\0/g, "").trim();
+
+  if (sanitizedPrompt.length === 0) {
+    return c.json({ error: "Prompt cannot be empty after sanitization" }, 400);
+  }
+
   // 1. Analyze Complexity (Local <1ms)
-  const complexity = scorePrompt(prompt);
+  const complexity = scorePrompt(sanitizedPrompt);
 
   // 2. Run Council Engine (Dynamic & Parallel)
   const engine = new CouncilEngine(c.env);
   
   const request: ConsensusRequest = {
-    prompt,
+    prompt: sanitizedPrompt,
     budget: body.budget || "low",
     reliability: body.reliability || "standard"
   };

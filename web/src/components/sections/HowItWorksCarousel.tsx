@@ -43,17 +43,18 @@ const features = [
 
 export const HowItWorksCarousel = () => {
   return (
-    <section id="how-it-works" className="py-32 bg-[#f5f2ff] overflow-hidden">
-      <div className="container-custom">
-        <div className="mb-24">
-          <h2 className="text-5xl md:text-7xl font-bold tracking-tighter text-[#111827]">
-            The Infrastructure
-            <br />
-            <span className="text-[#4F46E5]/40 text-4xl md:text-6xl tracking-tight">of Reliable AI</span>
-          </h2>
-        </div>
+    <section id="how-it-works" className="py-32 bg-white overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 mb-24">
+        <h2 className="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tighter text-[#111827]">
+          Infrastructure.
+          <br />
+          <span className="text-[#4F46E5]/20">Built for scale.</span>
+        </h2>
+      </div>
 
-        <div className="flex overflow-x-auto no-scrollbar gap-8 pb-12 snap-x snap-mandatory">
+      {/* Horizontal Scroll Container - full width to right edge */}
+      <div className="flex overflow-x-auto no-scrollbar py-4 pl-4 md:pl-[max(1rem,calc((100vw-80rem)/2))]">
+        <div className="flex flex-row gap-6 pr-10">
           {features.map((feature, index) => (
             <motion.div
               key={index}
@@ -61,32 +62,39 @@ export const HowItWorksCarousel = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ delay: index * 0.1, duration: 0.5 }}
-              whileHover={{ y: -12, transition: { duration: 0.2 } }}
-              className={`flex-shrink-0 w-[350px] md:w-[450px] h-[560px] rounded-[48px] p-10 flex flex-col justify-between snap-center border border-black/[0.03] shadow-sm relative overflow-hidden group ${feature.color}`}
+              whileHover="hover"
+              className="flex-shrink-0 w-[350px] md:w-[450px] h-[560px] rounded-3xl p-10 flex flex-col justify-between border border-black/[0.03] shadow-sm relative overflow-hidden group bg-[#f6f6f8] cursor-pointer"
             >
               {/* Massive Greyed out Number */}
-              <div className="absolute -top-10 -right-4 text-[240px] font-black text-black/[0.04] leading-none select-none">
-                {index + 1}
-              </div>
+              <motion.div 
+                variants={{
+                  hover: { color: "rgba(0, 0, 0, 0.15)", y: -5 }
+                }}
+                className="absolute top-10 left-10 text-[200px] font-black text-black/[0.05] leading-none select-none transition-colors duration-300"
+              >
+                0{index + 1}
+              </motion.div>
 
-              <div className="relative z-10 text-right">
-                 <div className={`inline-flex w-20 h-20 rounded-3xl items-center justify-center bg-white shadow-soft ${feature.iconColor}`}>
-                    <feature.icon className="w-10 h-10" />
-                 </div>
-              </div>
+              <div className="flex-1" />
 
               <div className="relative z-10">
-                <h3 className="text-4xl font-bold tracking-tight text-[#111827] mb-6">
-                  {feature.title}
-                </h3>
-                <p className="text-xl text-gray-600 font-medium leading-relaxed">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-white shadow-soft ${feature.iconColor}`}>
+                    <feature.icon className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-4xl font-bold tracking-tight text-[#111827]">
+                    {feature.title}
+                  </h3>
+                </div>
+                <p className="text-xl text-gray-500 font-medium leading-[1.4] max-w-[90%]">
                   {feature.description}
                 </p>
+                
+                {/* Visual Dash at bottom */}
+                <div className="mt-12 w-16 h-1.5 bg-[#4F46E5]/10 rounded-full group-hover:bg-[#4F46E5] transition-colors duration-300" />
               </div>
             </motion.div>
           ))}
-          {/* Spacer for horizontal scroll */}
-          <div className="flex-shrink-0 w-8" />
         </div>
       </div>
     </section>

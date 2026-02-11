@@ -12,10 +12,10 @@ export const StickyDashboardSection = () => {
     offset: ["start end", "end start"],
   });
 
-  // Scale from 0.8 to 1.1 as you scroll
-  const scale = useTransform(scrollYProgress, [0, 0.4], [0.85, 1]);
+  // Scale from 0.85 to 1 as you scroll
+  const scale = useTransform(scrollYProgress, [0, 0.3], [0.85, 1]);
   // Opacity from 0 to 1 as you scroll
-  const opacity = useTransform(scrollYProgress, [0, 0.4], [0, 1]);
+  const opacity = useTransform(scrollYProgress, [0, 0.25], [0, 1]);
 
   const modelStatus = [
     { name: 'GPT-4o mini', status: 'online', latency: '45ms' },
@@ -32,8 +32,8 @@ export const StickyDashboardSection = () => {
           style={{ scale, opacity }}
           className="w-full max-w-4xl"
         >
-          <div className="bg-white rounded-[40px] p-10 md:p-16 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-white/20 backdrop-blur-sm relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#EEF2FF] to-transparent opacity-50" />
+          <div className="bg-white rounded-[40px] p-10 md:p-16 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] border border-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-[#EEF2FF] to-white/50 opacity-100" />
             
             <div className="relative z-10">
               <div className="flex items-center justify-between mb-12">

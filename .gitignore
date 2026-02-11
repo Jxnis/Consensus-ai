@@ -4,3 +4,12 @@ dist
 .env
 .next
 .wrangler
+CLAUDE.md
+PLAN.md
+SKILLS.md
+.agent/*
+task.md
+.claude/*
+implementation_plan.md
+review_plan.md
+task.md

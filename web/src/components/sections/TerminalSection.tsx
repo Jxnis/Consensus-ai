@@ -6,22 +6,24 @@ const TerminalSection = () => {
   const [activeTab, setActiveTab] = useState<'single' | 'consensus'>('consensus');
 
   const singleModelOutput = `{
-  "answer": "The capital of France is Paris.",
-  "confidence": 0.92,
-  "sources": ["wikipedia"],
-  "latency_ms": 845
+  "risk_assessment": "Low",
+  "clauses_found": 2,
+  "summary": "Standard DPA with limited liability.",
+  "missing": ["Liability Shifts", "Audit Rights"],
+  "confidence": 0.82
 }`;
 
   const consensusOutput = `{
-  "answer": "The capital of France is Paris.",
-  "confidence": 0.98,
-  "agreement_ratio": 0.95,
-  "council": ["gpt-4o", "llama-3", "claude-haiku"],
-  "latency_ms": 342,
-  "verification": {
-    "semantic_overlap": 0.97,
-    "token_consensus": true
-  }
+  "risk_assessment": "Critical",
+  "clauses_found": 9,
+  "summary": "Hidden indemnity shifts found in 4.2.",
+  "verified_risks": [
+    "Unlimited breach liability",
+    "No notification period",
+    "SCC module 3 violation"
+  ],
+  "agreement_ratio": 0.99,
+  "council": ["gpt-4o", "claude-3.5", "llama-3.1"]
 }`;
 
   return (
@@ -111,8 +113,8 @@ const TerminalSection = () => {
                 {/* Prompt */}
                 <div className="mb-4 font-mono text-sm">
                   <span className="text-primary">$</span>{' '}
-                  <span className="text-gray-600">prompt:</span>{' '}
-                  <span className="text-gray-400">"What is the capital of France?"</span>
+                  <span className="text-gray-600">query:</span>{' '}
+                  <span className="text-gray-400">"Scan sub-processor agreement for liability shifts."</span>
                 </div>
 
                 {/* Output */}

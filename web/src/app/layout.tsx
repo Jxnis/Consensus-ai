@@ -18,6 +18,7 @@ const manrope = Manrope({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://consensuscloud.ai'),
   title: 'Consensus Cloud | The World\'s First LLM Arbitrage Network',
   description: 'Eliminate hallucinations and reduce costs with a council of models. Verified intelligence for the agentic era.',
   openGraph: {
@@ -34,6 +35,12 @@ export const metadata: Metadata = {
     ],
     locale: 'en_US',
     type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Consensus Cloud | The World\'s First LLM Arbitrage Network',
+    description: 'Eliminate hallucinations and reduce costs with a council of models.',
+    images: ['/og-image.png'],
   },
 }
 
