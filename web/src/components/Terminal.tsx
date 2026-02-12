@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence } from 'motion/react'
 import { Terminal as TerminalIcon, Sparkles, CheckCircle2, AlertCircle, Cpu, Zap, Command, RefreshCcw, ShieldCheck } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -31,9 +31,14 @@ export default function Terminal() {
 
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787";
+      const headers = { 
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer sk_demo_consensus_2024'
+      };
+
       const response = await fetch(`${API_URL}/v1/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
           budget: 'low'

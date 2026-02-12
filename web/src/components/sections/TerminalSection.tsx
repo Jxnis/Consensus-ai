@@ -139,13 +139,13 @@ const TerminalSection = () => {
                     <div className="px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
                       <span className="text-xs text-gray-500 block">Latency</span>
                       <span className="text-sm font-semibold text-dark">
-                        {activeTab === 'single' ? '845ms' : '342ms'}
+                        {activeTab === 'single' ? '850ms' : '1240ms'}
                       </span>
                     </div>
                     <div className="px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
                       <span className="text-xs text-gray-500 block">Confidence</span>
                       <span className={`text-sm font-semibold ${activeTab === 'single' ? 'text-amber-600' : 'text-emerald-600'}`}>
-                        {activeTab === 'single' ? '92%' : '98%'}
+                        {activeTab === 'single' ? '~75%' : '98%'}
                       </span>
                     </div>
                   </div>
@@ -153,12 +153,7 @@ const TerminalSection = () => {
 
                 {/* Key Differences */}
                 <div className="mt-6 pt-4 border-t border-gray-100">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider">Key differences</span>
-                    <span className="text-xs font-medium text-primary">
-                      {activeTab === 'consensus' ? 'Consensus verified' : 'Single source'}
-                    </span>
-                  </div>
+                  <h4 className="text-sm font-bold text-dark mb-3">Key Differences:</h4>
                   <div className="space-y-2">
                     {activeTab === 'consensus' ? (
                       <>

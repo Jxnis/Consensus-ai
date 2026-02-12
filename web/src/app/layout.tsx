@@ -1,6 +1,7 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import { Outfit, JetBrains_Mono, Manrope } from 'next/font/google'
+import { ThemeProvider } from '@/components/ThemeProvider'
 
 const outfit = Outfit({ 
   subsets: ['latin'],
@@ -19,11 +20,11 @@ const manrope = Manrope({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://consensuscloud.ai'),
-  title: 'Consensus Cloud | The World\'s First LLM Arbitrage Network',
-  description: 'Eliminate hallucinations and reduce costs with a council of models. Verified intelligence for the agentic era.',
+  title: 'Consensus Cloud | Multi-Model Consensus Routing for AI',
+  description: 'Get GPT-4 level reliability at a fraction of the cost. The world\'s first verified LLM router. Multiple models, one consensus.',
   openGraph: {
     title: 'Consensus Cloud',
-    description: 'The Trust Layer for AI.',
+    description: 'Multiple Models. One Consensus. The Trust Layer for AI.',
     url: 'https://consensuscloud.ai',
     siteName: 'Consensus Cloud',
     images: [
@@ -38,8 +39,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Consensus Cloud | The World\'s First LLM Arbitrage Network',
-    description: 'Eliminate hallucinations and reduce costs with a council of models.',
+    title: 'Consensus Cloud | Multi-Model Consensus Routing',
+    description: 'Get GPT-4 level reliability at a fraction of the cost. Multiple models, one consensus.',
     images: ['/og-image.png'],
   },
 }
@@ -50,8 +51,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${outfit.variable} ${jetbrains.variable} ${manrope.variable}`}>
-      <body className="font-sans antialiased">{children}</body>
+    <html lang="en" className={`${outfit.variable} ${jetbrains.variable} ${manrope.variable}`} suppressHydrationWarning>
+      <body className="font-sans antialiased">
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   )
 }

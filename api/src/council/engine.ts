@@ -76,7 +76,8 @@ export class CouncilEngine {
     let modelUsed = topGroup.models[0];
 
     // If confidence is low or there is a strong disagreement, escalate to Chairman
-    if (confidence < 0.6 && tier !== "SIMPLE") {
+    // (Only for paid/x402 tiers - Free tier gets raw consensus to save costs)
+    if (confidence < 0.6 && tier !== "SIMPLE" && request.budget !== "free") {
       console.log(`[CouncilEngine] Low confidence (${confidence.toFixed(2)}). Escalating to Chairman for synthesis...`);
       
       const chairmanResponse = await this.openai.chat.completions.create({
@@ -201,27 +202,22 @@ export class CouncilEngine {
    */
   private getFallbackModels(): ModelInfo[] {
     return [
-      // Free tier
+      // Free tier — zero cost to us
       { id: "meta-llama/llama-3.1-8b-instruct:free", name: "Llama 3.1 8B", provider: "Meta", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 8192 },
       { id: "google/gemini-2.0-flash-thinking-exp:free", name: "Gemini 2.0 Flash", provider: "Google", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 32768 },
       { id: "mistralai/mistral-7b-instruct:free", name: "Mistral 7B", provider: "Mistral", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 8192 },
       
-      // Cheap tier ($0.10-0.50/1M)
+      // Cheap tier ($0.05-$0.50/1M) — low cost
       { id: "openai/gpt-4o-mini", name: "GPT-4o mini", provider: "OpenAI", pricePer1M: 0.15, inputPrice: 0.15, outputPrice: 0.60, isFree: false, contextLength: 128000 },
       { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku", provider: "Anthropic", pricePer1M: 0.25, inputPrice: 0.25, outputPrice: 1.25, isFree: false, contextLength: 200000 },
       { id: "google/gemini-flash-1.5", name: "Gemini 1.5 Flash", provider: "Google", pricePer1M: 0.075, inputPrice: 0.075, outputPrice: 0.30, isFree: false, contextLength: 1000000 },
       { id: "meta-llama/llama-3.1-70b-instruct", name: "Llama 3.1 70B", provider: "Meta", pricePer1M: 0.35, inputPrice: 0.35, outputPrice: 0.40, isFree: false, contextLength: 131072 },
       
-      // Smart tier ($1-10/1M)
+      // Smart tier ($1-$5/1M) — this is our ceiling, no premium models
       { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", pricePer1M: 2.50, inputPrice: 2.50, outputPrice: 10.0, isFree: false, contextLength: 128000 },
       { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", provider: "Anthropic", pricePer1M: 3.0, inputPrice: 3.0, outputPrice: 15.0, isFree: false, contextLength: 200000 },
       { id: "google/gemini-pro-1.5", name: "Gemini 1.5 Pro", provider: "Google", pricePer1M: 1.25, inputPrice: 1.25, outputPrice: 5.0, isFree: false, contextLength: 2000000 },
       { id: "meta-llama/llama-3.1-405b-instruct", name: "Llama 3.1 405B", provider: "Meta", pricePer1M: 2.70, inputPrice: 2.70, outputPrice: 2.70, isFree: false, contextLength: 131072 },
-      
-      // Premium tier ($10+/1M)
-      { id: "anthropic/claude-opus-4", name: "Claude Opus 4", provider: "Anthropic", pricePer1M: 15.0, inputPrice: 15.0, outputPrice: 75.0, isFree: false, contextLength: 200000 },
-      { id: "openai/o1-preview", name: "OpenAI o1-preview", provider: "OpenAI", pricePer1M: 15.0, inputPrice: 15.0, outputPrice: 60.0, isFree: false, contextLength: 128000 },
-      { id: "perplexity/llama-3.1-sonar-large-128k-online", name: "Perplexity Sonar Large", provider: "Perplexity", pricePer1M: 5.0, inputPrice: 5.0, outputPrice: 5.0, isFree: false, contextLength: 127072 },
     ];
   }
 }

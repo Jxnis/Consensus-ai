@@ -42,11 +42,15 @@ const PlaygroundSection = () => {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787';
       const response = await fetch(`${apiUrl}/v1/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer sk_demo_consensus_2024',
+          'X-Source': 'consensus-playground'
+        },
         body: JSON.stringify({ 
           messages: [{ role: 'user', content: prompt }],
-          budget: 'low'
-        })
+          budget: 'medium', // Default for playground
+        }),
       });
 
       if (response.ok) {

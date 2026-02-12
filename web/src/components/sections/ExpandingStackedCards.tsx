@@ -63,7 +63,7 @@ export const ExpandingStackedCards = () => {
         <h2 className="text-5xl md:text-8xl font-bold tracking-tighter text-[#111827]">
           Elite Performance.
           <br />
-          <span className="text-[#4F46E5] opacity-20">No Compromise.</span>
+          <span className="text-[#2835f8] opacity-20">No Compromise.</span>
         </h2>
       </div>
 

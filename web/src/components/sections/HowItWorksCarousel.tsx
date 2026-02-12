@@ -35,7 +35,7 @@ const features = [
   {
     icon: History,
     title: "Full Auditability",
-    description: "Every decision, vote, and semantic score is logged on-chain (optional) or in your secure dashboard for complete transparency.",
+    description: "Every decision, vote, and semantic score is logged in your secure dashboard for complete transparency and compliance.",
     color: "bg-[#F5F2FF]",
     iconColor: "text-purple-600",
   },
@@ -48,7 +48,7 @@ export const HowItWorksCarousel = () => {
         <h2 className="text-6xl md:text-8xl lg:text-9xl font-bold tracking-tighter text-[#111827]">
           Infrastructure.
           <br />
-          <span className="text-[#4F46E5]/20">Built for scale.</span>
+          <span className="text-[#2835f8]/20">Built for scale.</span>
         </h2>
       </div>
 
@@ -91,7 +91,7 @@ export const HowItWorksCarousel = () => {
                 </p>
                 
                 {/* Visual Dash at bottom */}
-                <div className="mt-12 w-16 h-1.5 bg-[#4F46E5]/10 rounded-full group-hover:bg-[#4F46E5] transition-colors duration-300" />
+                <div className="mt-12 w-16 h-1.5 bg-[#2835f8]/10 rounded-full group-hover:bg-[#2835f8] transition-colors duration-300" />
               </div>
             </motion.div>
           ))}

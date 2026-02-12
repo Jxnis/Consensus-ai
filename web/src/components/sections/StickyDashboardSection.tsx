@@ -43,7 +43,7 @@ export const StickyDashboardSection = () => {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
                   </span>
-                  <span className="text-sm font-bold text-emerald-700 tracking-tight">LIVE ON MAINNET</span>
+                  <span className="text-sm font-bold text-emerald-700 tracking-tight">OPERATIONAL</span>
                 </div>
               </div>
 
@@ -54,10 +54,10 @@ export const StickyDashboardSection = () => {
                     initial={{ opacity: 0, x: -20 }}
                     whileInView={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
-                    className="flex items-center justify-between p-5 bg-[#f9fafb]/80 border border-gray-100 rounded-2xl hover:bg-white hover:border-[#4F46E5]/20 transition-all duration-300 group"
+                    className="flex items-center justify-between p-5 bg-[#f9fafb]/80 border border-gray-100 rounded-2xl hover:bg-white hover:border-[#2835f8]/20 transition-all duration-300 group"
                   >
                     <div className="flex items-center gap-5">
-                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:bg-[#4F46E5] group-hover:text-white transition-colors duration-300">
+                      <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:bg-[#2835f8] group-hover:text-white transition-colors duration-300">
                         <CheckCircle2 className="w-6 h-6" />
                       </div>
                       <div>

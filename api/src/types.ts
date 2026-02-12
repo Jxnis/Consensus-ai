@@ -39,5 +39,7 @@ export interface ConsensusResponse {
 
 export interface CloudflareBindings {
   OPENROUTER_API_KEY: string;
+  ADMIN_TOKEN: string;
+  X402_WALLET_ADDRESS: string;
   CONSENSUS_CACHE: KVNamespace;
 }
