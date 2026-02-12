@@ -12,7 +12,7 @@ import FooterSection from '@/components/sections/FooterSection';
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#f5f5f4] selection:bg-[#4F46E5]/20">
+    <div className="min-h-screen bg-[#f5f5f4] selection:bg-[#2835f8]/20 overflow-x-hidden">
       <Navigation />
       
       <main>
@@ -26,9 +26,7 @@ export default function LandingPage() {
         <HowItWorksCarousel />
         
         {/* Stable Comparison Section */}
-        <div id="docs">
-          <TerminalSection />
-        </div>
+        <TerminalSection />
         
         {/* Interactive Playground */}
         <div id="products">

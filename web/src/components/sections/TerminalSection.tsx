@@ -6,22 +6,24 @@ const TerminalSection = () => {
   const [activeTab, setActiveTab] = useState<'single' | 'consensus'>('consensus');
 
   const singleModelOutput = `{
-  "answer": "The capital of France is Paris.",
-  "confidence": 0.92,
-  "sources": ["wikipedia"],
-  "latency_ms": 845
+  "risk_assessment": "Low",
+  "clauses_found": 2,
+  "summary": "Standard DPA with limited liability.",
+  "missing": ["Liability Shifts", "Audit Rights"],
+  "confidence": 0.82
 }`;
 
   const consensusOutput = `{
-  "answer": "The capital of France is Paris.",
-  "confidence": 0.98,
-  "agreement_ratio": 0.95,
-  "council": ["gpt-4o", "llama-3", "claude-haiku"],
-  "latency_ms": 342,
-  "verification": {
-    "semantic_overlap": 0.97,
-    "token_consensus": true
-  }
+  "risk_assessment": "Critical",
+  "clauses_found": 9,
+  "summary": "Hidden indemnity shifts found in 4.2.",
+  "verified_risks": [
+    "Unlimited breach liability",
+    "No notification period",
+    "SCC module 3 violation"
+  ],
+  "agreement_ratio": 0.99,
+  "council": ["gpt-4o", "claude-3.5", "llama-3.1"]
 }`;
 
   return (
@@ -111,8 +113,8 @@ const TerminalSection = () => {
                 {/* Prompt */}
                 <div className="mb-4 font-mono text-sm">
                   <span className="text-primary">$</span>{' '}
-                  <span className="text-gray-600">prompt:</span>{' '}
-                  <span className="text-gray-400">"What is the capital of France?"</span>
+                  <span className="text-gray-600">query:</span>{' '}
+                  <span className="text-gray-400">"Scan sub-processor agreement for liability shifts."</span>
                 </div>
 
                 {/* Output */}
@@ -137,13 +139,13 @@ const TerminalSection = () => {
                     <div className="px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
                       <span className="text-xs text-gray-500 block">Latency</span>
                       <span className="text-sm font-semibold text-dark">
-                        {activeTab === 'single' ? '845ms' : '342ms'}
+                        {activeTab === 'single' ? '850ms' : '1240ms'}
                       </span>
                     </div>
                     <div className="px-3 py-2 bg-gray-50 rounded-xl border border-gray-100">
                       <span className="text-xs text-gray-500 block">Confidence</span>
                       <span className={`text-sm font-semibold ${activeTab === 'single' ? 'text-amber-600' : 'text-emerald-600'}`}>
-                        {activeTab === 'single' ? '92%' : '98%'}
+                        {activeTab === 'single' ? '~75%' : '98%'}
                       </span>
                     </div>
                   </div>
@@ -151,12 +153,7 @@ const TerminalSection = () => {
 
                 {/* Key Differences */}
                 <div className="mt-6 pt-4 border-t border-gray-100">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-gray-500 uppercase tracking-wider">Key differences</span>
-                    <span className="text-xs font-medium text-primary">
-                      {activeTab === 'consensus' ? 'Consensus verified' : 'Single source'}
-                    </span>
-                  </div>
+                  <h4 className="text-sm font-bold text-dark mb-3">Key Differences:</h4>
                   <div className="space-y-2">
                     {activeTab === 'consensus' ? (
                       <>

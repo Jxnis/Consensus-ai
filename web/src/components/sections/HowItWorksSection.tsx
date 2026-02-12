@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, useInView } from 'motion/react';
 import { Route, Zap, ShieldCheck } from 'lucide-react';
 
 const HowItWorksSection = () => {

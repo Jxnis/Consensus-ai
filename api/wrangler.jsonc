@@ -31,5 +31,12 @@
 	// "observability": {
 	//   "enabled": true,
 	//   "head_sampling_rate": 1
-	// }
+	// },
+	"vars": {
+		"X402_WALLET_ADDRESS": "0x0000000000000000000000000000000000000000"
+	}
+	// Secrets (set via `wrangler secret put`):
+	// - OPENROUTER_API_KEY: Your OpenRouter API key
+	// - ADMIN_TOKEN: Secret for /admin/create-key endpoint
+	// - X402_WALLET_ADDRESS: Base Mainnet wallet for x402 payments
 }

@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Bot, HeadphonesIcon, BookOpen, Scale, ArrowUpRight } from 'lucide-react';
 
 const UseCasesSection = () => {

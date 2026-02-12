@@ -1,8 +1,8 @@
 {
-  "name": "consensus-sdk",
+  "name": "@consensus-cloud/sdk",
   "version": "1.0.0",
   "type": "module",
-  "description": "",
+  "description": "Official TypeScript SDK for ConsensusCloud - Multi-model consensus routing with x402 payment protocol",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -21,7 +21,7 @@
     "llm",
     "x402"
   ],
-  "author": "",
+  "author": "ConsensusCloud",
   "license": "ISC",
   "dependencies": {
     "openai": "^4.76.0",
