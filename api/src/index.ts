@@ -186,11 +186,17 @@ app.use("/v1/chat/completions", async (c, next) => {
     const clone = c.req.raw.clone();
     const body = await clone.json() as any;
     
+    // Robust check: handle missing budget, mixed case
+    const budget = String(body.budget || "").toLowerCase();
+    
     // If explicitly requesting free budget, let them through as Free Tier
-    if (body.budget === "free") {
+    if (budget === "free") {
       return await next();
+    } else {
+      console.log(`[Auth Check] Unauthed request with budget="${budget}". Enforcing x402.`);
     }
   } catch (e) {
+    console.error("[Auth Check] Body parse failed (likely empty/malformed). Enforcing x402.", e);
     // JSON parse error or empty body - let x402 handler deal with it
   }
 
