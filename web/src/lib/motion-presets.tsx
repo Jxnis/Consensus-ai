@@ -11,9 +11,9 @@ const SMOOTH_OUT = [0.22, 1, 0.36, 1] as const;
 export const motionPresets = {
   // Hero section animations - strong entrance
   heroSlideUp: {
-    initial: { opacity: 0, y: 30 },
+    initial: { opacity: 0, y: 20 },
     animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.8, ease: SMOOTH_EASE },
+    transition: { duration: 0.6, ease: SMOOTH_EASE },
   },
 
   // Standard slide up
@@ -37,7 +37,7 @@ export const motionPresets = {
     transition: { duration: 0.4, ease: SMOOTH_OUT },
   },
 
-  // Scale up (for cards/buttons)
+  // Scale in (for cards/buttons)
   scaleIn: {
     initial: { opacity: 0, scale: 0.95 },
     animate: { opacity: 1, scale: 1 },
@@ -143,54 +143,6 @@ export const SlideUp = memo(function SlideUp({
 }) {
   return (
     <MotionDiv preset="slideUp" delay={delay} className={className}>
-      {children}
-    </MotionDiv>
-  );
-});
-
-export const SlideUpSubtle = memo(function SlideUpSubtle({
-  className,
-  children,
-  delay = 0,
-}: {
-  className?: string;
-  children: React.ReactNode;
-  delay?: number;
-}) {
-  return (
-    <MotionDiv preset="slideUpSubtle" delay={delay} className={className}>
-      {children}
-    </MotionDiv>
-  );
-});
-
-export const FadeIn = memo(function FadeIn({
-  className,
-  children,
-  delay = 0,
-}: {
-  className?: string;
-  children: React.ReactNode;
-  delay?: number;
-}) {
-  return (
-    <MotionDiv preset="fadeIn" delay={delay} className={className}>
-      {children}
-    </MotionDiv>
-  );
-});
-
-export const ScaleIn = memo(function ScaleIn({
-  className,
-  children,
-  delay = 0,
-}: {
-  className?: string;
-  children: React.ReactNode;
-  delay?: number;
-}) {
-  return (
-    <MotionDiv preset="scaleIn" delay={delay} className={className}>
       {children}
     </MotionDiv>
   );

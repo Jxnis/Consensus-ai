@@ -1,6 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Outfit, JetBrains_Mono, Manrope } from 'next/font/google'
+import { Outfit, JetBrains_Mono, Manrope, Space_Grotesk } from 'next/font/google'
 import { ThemeProvider } from '@/components/ThemeProvider'
 
 const outfit = Outfit({ 
@@ -16,6 +16,11 @@ const jetbrains = JetBrains_Mono({
 const manrope = Manrope({
   subsets: ['latin'],
   variable: '--font-manrope',
+})
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
 })
 
 export const metadata: Metadata = {
@@ -51,7 +56,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${outfit.variable} ${jetbrains.variable} ${manrope.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${outfit.variable} ${jetbrains.variable} ${manrope.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
+      <head>
+        <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
+      </head>
       <body className="font-sans antialiased">
         <ThemeProvider>
           {children}
