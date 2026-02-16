@@ -27,13 +27,13 @@ const PlaygroundNew = () => {
     models: 0,
   });
 
-  // Models state (5 models from original backend logic)
+  // Models state (Matching api/src/council/engine.ts fallback free tier)
   const [models, setModels] = useState<ModelResponse[]>([
-    { id: 'llama', name: 'Llama 3.1', icon: Brain, response: '', confidence: 0, status: 'idle' },
-    { id: 'gemini', name: 'Gemini 2.0', icon: Zap, response: '', confidence: 0, status: 'idle' },
-    { id: 'claude', name: 'Claude 3.5', icon: MessageSquare, response: '', confidence: 0, status: 'idle' },
-    { id: 'mistral', name: 'Mistral 7B', icon: Cpu, response: '', confidence: 0, status: 'idle' },
-    { id: 'gpt', name: 'GPT-4o', icon: Sparkles, response: '', confidence: 0, status: 'idle' },
+    { id: 'llama-3.1', name: 'Llama 3.1 8B', icon: Brain, response: '', confidence: 0, status: 'idle' },
+    { id: 'gemini-2', name: 'Gemini 2.0 Flash', icon: Zap, response: '', confidence: 0, status: 'idle' },
+    { id: 'llama-3.2', name: 'Llama 3.2 3B', icon: Cpu, response: '', confidence: 0, status: 'idle' },
+    // { id: 'mistral', name: 'Mistral 7B', icon: MessageSquare, response: '', confidence: 0, status: 'idle' },
+    // { id: 'gemma', name: 'Gemma 7B', icon: Sparkles, response: '', confidence: 0, status: 'idle' },
   ]);
 
   const handleRunConsensus = async () => {
@@ -59,7 +59,7 @@ const PlaygroundNew = () => {
         },
         body: JSON.stringify({ 
           messages: [{ role: 'user', content: prompt }],
-          budget: 'medium',
+          budget: 'free', // Use free tier explicitly
         }),
       });
 
@@ -199,7 +199,7 @@ const PlaygroundNew = () => {
 
         {/* Model Cards Grid */}
         {(phase !== 'idle' || showResult) && (
-          <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10">
+        <div className="grid md:grid-cols-3 gap-6 mb-10 max-w-4xl mx-auto">
             {models.map((model, i) => (
               <motion.div
                 key={model.id}

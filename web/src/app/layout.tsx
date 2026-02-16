@@ -24,14 +24,14 @@ const spaceGrotesk = Space_Grotesk({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://consensuscloud.ai'),
-  title: 'Consensus Cloud | Multi-Model Consensus Routing for AI',
-  description: 'Get GPT-4 level reliability at a fraction of the cost. The world\'s first verified LLM router. Multiple models, one consensus.',
+  metadataBase: new URL('https://councilrouter.ai'),
+  title: 'CouncilRouter | Multi-Model Consensus Routing for AI',
+  description: "Get GPT-4 level reliability at a fraction of the cost. The world\'s first verified LLM router. Multiple models, one consensus.",
   openGraph: {
-    title: 'Consensus Cloud',
-    description: 'Multiple Models. One Consensus. The Trust Layer for AI.',
-    url: 'https://consensuscloud.ai',
-    siteName: 'Consensus Cloud',
+    title: 'CouncilRouter',
+    description: "Multiple Models. One Consensus. The Trust Layer for AI.",
+    url: 'https://councilrouter.ai',
+    siteName: 'CouncilRouter',
     images: [
       {
         url: '/og-image.png',
@@ -44,8 +44,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Consensus Cloud | Multi-Model Consensus Routing',
-    description: 'Get GPT-4 level reliability at a fraction of the cost. Multiple models, one consensus.',
+    title: 'CouncilRouter | Verified LLM Consensus',
+    description: "Get GPT-4 level reliability at a fraction of the cost. Multiple models, one consensus.",
     images: ['/og-image.png'],
   },
 }

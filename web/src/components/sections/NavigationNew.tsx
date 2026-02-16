@@ -1,6 +1,7 @@
-import { useTheme } from "@/components/ThemeProvider";
+import { useTheme } from "../ThemeProvider";
 import { Sun, Moon } from "lucide-react";
 import { motion } from "motion/react";
+import CouncilLogo from "../CouncilLogo";
 
 const navLinks = [
   { label: "DOCS", href: "/docs" },
@@ -16,14 +17,15 @@ const NavigationNew = () => {
       initial={{ y: -20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
-      className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-background/70"
+      className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border/40"
     >
-      <div className="max-w-[1400px] mx-auto flex items-center justify-between px-8 h-16">
-        <a href="#" className="font-heading text-lg text-foreground tracking-tight">
-          ConsensusCloud
+      <div className="max-w-[1400px] mx-auto px-8 h-16 flex items-center justify-between">
+        <a href="#" className="flex items-center gap-1 group">
+            <CouncilLogo className="w-8 h-8 text-foreground transition-transform duration-500 group-hover:rotate-180" />
+            <span className="font-heading font-bold text-lg tracking-tight">CouncilRouter</span>
         </a>
 
-        <div className="flex items-center gap-10">
+        <div className="hidden md:flex items-center gap-8">
           {navLinks.map((link) => (
             <a
               key={link.label}

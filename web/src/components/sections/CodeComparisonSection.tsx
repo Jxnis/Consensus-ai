@@ -1,29 +1,32 @@
 import { motion, useInView } from "motion/react";
 import { useRef, useState } from "react";
 
-const singleModelCode = `$ prompt: "What is the capital of France?"
+const singleModelCode = `$ query: "Scan sub-processor agreement for liability shifts."
 
 {
-  "answer": "Paris is the capital of France,
-    known for the Eiffel Tower...",
+  "analysis": "Liability limited to direct damages. 
+    Standard indemnification applies.",
+  "risk_score": 3,
+  "verification": null,
   "confidence": null,
   "model": "gpt-4o",
-  "latency_ms": 890,
-  "verification": null
+  "latency_ms": 890
 }`;
 
-const consensusCode = `$ prompt: "What is the capital of France?"
+const consensusCode = `$ query: "Scan sub-processor agreement for liability shifts."
 
 {
-  "answer": "The capital of France is Paris.",
-  "confidence": 0.98,
-  "agreement_ratio": 0.95,
-  "council": ["gpt-4o", "llama-3", "claude-h…"],
-  "latency_ms": 342,
+  "analysis": "CRITICAL: Liability cap excludes data breach. 
+    Indemnity clause is one-sided (Vendor only).",
+  "risk_score": 8,
   "verification": {
     "semantic_overlap": 0.97,
-    "token_consensus": true
-  }
+    "token_consensus": true,
+    "flagged_by": ["claude-3-opus", "gpt-4o"]
+  },
+  "confidence": 0.98,
+  "council": ["gpt-4o", "claude-3", "mistral-l…"],
+  "agreement_ratio": 0.95
 }`;
 
 const CodeComparisonSection = () => {
