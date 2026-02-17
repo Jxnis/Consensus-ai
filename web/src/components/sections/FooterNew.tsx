@@ -4,7 +4,7 @@ const FooterNew = () => (
   <footer className="border-t border-border px-8 bg-background">
     <div className="max-w-[1400px] mx-auto py-12 flex flex-col md:flex-row items-center justify-between gap-6">
       <div className="flex items-center gap-3">
-        <CouncilLogo className="w-8 h-8 text-foreground" />
+        <CouncilLogo className="w-12 h-12 text-foreground" />
         <span className="font-heading text-sm text-foreground">© 2026 CouncilRouter</span>
       </div>
       <div className="flex items-center gap-8">

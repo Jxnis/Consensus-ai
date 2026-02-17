@@ -10,32 +10,93 @@ const navLinks = [
   { label: "PLAYGROUND", href: "#playground" },
 ];
 
-const NavigationNew = () => {
-  const { theme, toggleTheme } = useTheme();
-  const [isFullText, setIsFullText] = useState(true);
+function AnimatedTitle({
+  initialText,
+  finalText,
+}: {
+  initialText: string;
+  finalText: string;
+}) {
+  const [displayText, setDisplayText] = useState("");
+  const [isFinalStage, setIsFinalStage] = useState(false);
+  const [cycleCount, setCycleCount] = useState(0);
 
-  // Cycle animation state
   useEffect(() => {
-    const cycle = async () => {
-      // Stay on "CouncilRouter" for 5 seconds
-      await new Promise(r => setTimeout(r, 5000));
-      setIsFullText(false);
-      
-      // Stay on "CR" for 2 seconds
-      await new Promise(r => setTimeout(r, 2000));
-      setIsFullText(true);
+    let isMounted = true;
+    const timeouts: Array<ReturnType<typeof setTimeout>> = [];
+    let buffer = "";
+
+    const typingDelayMs = 70;
+    const deletingDelayMs = 50;
+    const holdDurationMs = 10000; // Longer hold as requested
+
+    const typeInitial = (index: number) => {
+      if (!isMounted) return;
+      if (index < initialText.length) {
+        buffer += initialText[index];
+        setDisplayText(buffer);
+        timeouts.push(setTimeout(() => typeInitial(index + 1), typingDelayMs));
+      } else {
+        timeouts.push(setTimeout(() => deleteText(buffer.length), holdDurationMs));
+      }
     };
 
-    // Run loop
-    const interval = setInterval(cycle, 8000); 
-    return () => clearInterval(interval);
-  }, []);
+    const deleteText = (remaining: number) => {
+      if (!isMounted) return;
+      if (remaining > 0) {
+        buffer = buffer.slice(0, -1);
+        setDisplayText(buffer);
+        timeouts.push(setTimeout(() => deleteText(remaining - 1), deletingDelayMs));
+      } else {
+        setIsFinalStage(true);
+        typeFinal(0);
+      }
+    };
 
-  const textVariants = {
-    hidden: { opacity: 0, x: -5 },
-    visible: { opacity: 1, x: 0 },
-    exit: { opacity: 0, width: 0, transition: { duration: 0.2 } }
-  };
+    const typeFinal = (index: number) => {
+      if (!isMounted) return;
+      if (index < finalText.length) {
+        buffer += finalText[index];
+        setDisplayText(buffer);
+        timeouts.push(setTimeout(() => typeFinal(index + 1), typingDelayMs));
+      } else {
+        // Hold final state then restart
+        timeouts.push(setTimeout(() => {
+           if(isMounted) {
+             setIsFinalStage(false);
+             setCycleCount(c => c + 1);
+           }
+        }, holdDurationMs));
+      }
+    };
+
+    typeInitial(0);
+
+    return () => {
+      isMounted = false;
+      timeouts.forEach(clearTimeout);
+    };
+  }, [initialText, finalText, cycleCount]);
+
+  if (isFinalStage) {
+    const slashIndex = displayText.indexOf("/");
+    if (slashIndex !== -1) {
+      const before = displayText.slice(0, slashIndex);
+      const after = displayText.slice(slashIndex);
+      return (
+        <span className="flex items-center">
+          <span>{before}</span>
+          <span className="text-muted-foreground opacity-50">{after}</span>
+        </span>
+      );
+    }
+  }
+
+  return <span className="flex items-center">{displayText}</span>;
+}
+
+const NavigationNew = () => {
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <motion.nav
@@ -46,39 +107,13 @@ const NavigationNew = () => {
     >
       <div className="max-w-[1400px] mx-auto px-8 h-16 flex items-center justify-between">
         <a href="#" className="flex items-center gap-1 group">
-            <CouncilLogo className="w-8 h-8 text-foreground transition-transform duration-500 group-hover:rotate-180" />
+            <CouncilLogo className="w-12 h-12 text-foreground transition-transform duration-500 group-hover:rotate-180" />
             
-            <div className="font-heading font-bold text-lg tracking-tight flex items-center overflow-hidden h-6">
-              <AnimatePresence mode="wait">
-                {isFullText ? (
-                  <motion.div 
-                    key="full"
-                    initial="hidden" animate="visible" exit="hidden"
-                    variants={{
-                      visible: { transition: { staggerChildren: 0.03 } }
-                    }}
-                    className="flex"
-                  >
-                    {"CouncilRouter".split("").map((char, i) => (
-                      <motion.span key={i} variants={textVariants}>
-                        {char}
-                      </motion.span>
-                    ))}
-                  </motion.div>
-                ) : (
-                  <motion.div 
-                    key="short"
-                    initial="hidden" animate="visible" exit="hidden"
-                    variants={{
-                      visible: { transition: { staggerChildren: 0.1 } }
-                    }}
-                    className="flex"
-                  >
-                    <motion.span variants={textVariants}>C</motion.span>
-                    <motion.span variants={textVariants}>R</motion.span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+            <div className="font-heading font-bold text-lg tracking-tight flex items-center overflow-hidden h-6 min-w-[150px]">
+              <AnimatedTitle 
+                initialText="CouncilRouter" 
+                finalText="CR" 
+              />
             </div>
         </a>
 
