@@ -2,9 +2,9 @@ import { motion, useInView } from "motion/react";
 import { useRef, useState, useEffect } from "react";
 
 const stats = [
-  { label: "Faster", value: 40, suffix: "%", desc: "Parallel execution reduces time-to-first-token." },
-  { label: "Cheaper", value: 60, suffix: "%", desc: "Arbitrage layer optimizes your model spend." },
-  { label: "Reliable", value: 0, suffix: "", display: "Zero", desc: "Hallucinations. The council must agree." },
+  { label: "Models per request", value: 3, suffix: "–5", desc: "Free tier uses 3 open-source models. Developer tier scales up to 5 for harder queries." },
+  { label: "Cost vs GPT-4o", value: 60, suffix: "%", desc: "Consensus across 3 cheap models costs less than a single frontier model call at equivalent token count." },
+  { label: "Fewer hallucinations", value: 0, suffix: "", display: "↓", desc: "Cross-model verification catches disagreements. Doesn't eliminate hallucinations — but surfaces them." },
 ];
 
 const AnimatedNumber = ({ target, suffix, display }: { target: number; suffix: string; display?: string }) => {

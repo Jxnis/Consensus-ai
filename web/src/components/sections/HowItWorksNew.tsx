@@ -5,22 +5,22 @@ const steps = [
   {
     num: "01",
     title: "Dynamic Selection",
-    body: "Every request triggers a task-specific council of top-tier models based on your latency and cost preferences.",
+    body: "Every request gets a task-specific council of models chosen based on your budget and complexity tier — free open-source models for exploratory queries, smarter models for critical ones.",
   },
   {
     num: "02",
-    title: "Racing Algorithm",
-    body: "Our proprietary racing engine executes multiple model calls in parallel, minimizing latency spikes while gathering diverse data points.",
+    title: "Parallel Execution",
+    body: "All model calls fire simultaneously. We collect responses as they arrive and abort the rest once we have enough — minimizing latency while gathering diverse answers.",
   },
   {
     num: "03",
     title: "Semantic Verification",
-    body: "We compare responses using semantic overlap and token consistency checks to identify the 'Consensus Truth' and eliminate hallucinations.",
+    body: "Responses are compared using semantic similarity. When models agree, we return the consensus answer with a confidence score. When they disagree, you know the answer is contested.",
   },
   {
     num: "04",
-    title: "Arbitrage Layer",
-    body: "Only return what's verified. We arbitrage the intelligence of expensive models with the speed of cheaper ones to optimize your spend.",
+    title: "Chairman Synthesis",
+    body: "On low-confidence results, a synthesis model reads all responses and produces a final arbitrated answer — surfacing the most defensible position from the council's disagreement.",
   },
 ];
 

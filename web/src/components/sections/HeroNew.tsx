@@ -26,8 +26,8 @@ const HeroNew = () => {
           className="mt-16 pt-8 border-t border-border flex flex-col md:flex-row justify-between items-start md:items-end gap-8"
         >
           <p className="font-mono text-[11px] leading-relaxed text-muted-foreground max-w-md tracking-wide">
-            A council of top-tier AI models verifies every answer in real-time.
-            GPT-4 reliability at a fraction of the cost.
+            A council of AI models cross-checks every answer for higher confidence.
+            Multi-model verification at a fraction of single-model frontier cost.
           </p>
 
           <div className="flex items-center gap-4">

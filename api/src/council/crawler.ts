@@ -39,8 +39,8 @@ export class ModelCrawler {
       const response = await fetch("https://openrouter.ai/api/v1/models", {
         headers: {
           "Authorization": `Bearer ${apiKey}`,
-          "HTTP-Referer": "https://consensus.ai", // Required by OpenRouter
-          "X-Title": "Consensus API"
+          "HTTP-Referer": "https://councilrouter.ai", // Required by OpenRouter
+          "X-Title": "CouncilRouter"
         }
       });
 

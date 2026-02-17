@@ -19,7 +19,7 @@ export default function DocsPage() {
   const [activeSection, setActiveSection] = useState("introduction");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const apiUrl = "https://consensus-api.workers.dev/v1/chat/completions";
+  const apiUrl = "https://consensus-api.janis-ellerbrock.workers.dev/v1/chat/completions";
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(apiUrl);

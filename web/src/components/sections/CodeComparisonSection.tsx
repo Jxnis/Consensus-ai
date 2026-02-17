@@ -9,8 +9,7 @@ const singleModelCode = `$ query: "Scan sub-processor agreement for liability sh
   "risk_score": 3,
   "verification": null,
   "confidence": null,
-  "model": "gpt-4o",
-  "latency_ms": 890
+  "model": "gpt-4o"
 }`;
 
 const consensusCode = `$ query: "Scan sub-processor agreement for liability shifts."
@@ -20,13 +19,13 @@ const consensusCode = `$ query: "Scan sub-processor agreement for liability shif
     Indemnity clause is one-sided (Vendor only).",
   "risk_score": 8,
   "verification": {
-    "semantic_overlap": 0.97,
-    "token_consensus": true,
-    "flagged_by": ["claude-3-opus", "gpt-4o"]
+    "semantic_overlap": 0.91,
+    "council_agreement": true,
+    "flagged_by": ["llama-3.1-70b", "gemini-flash"]
   },
-  "confidence": 0.98,
-  "council": ["gpt-4o", "claude-3", "mistral-l…"],
-  "agreement_ratio": 0.95
+  "confidence": 0.94,
+  "council": ["llama-3.1-70b", "gemini-flash", "qwen-2.5"],
+  "agreement_ratio": 0.94
 }`;
 
 const CodeComparisonSection = () => {
@@ -54,7 +53,7 @@ const CodeComparisonSection = () => {
             See how single-model outputs drift—and how consensus tightens the answer.
           </p>
           <div className="flex gap-3 flex-wrap">
-            {["Live diff view", "Latency tracking", "Token overlap"].map((label) => (
+            {["Confidence score", "Model agreement", "Token overlap"].map((label) => (
               <span
                 key={label}
                 className="font-mono text-[10px] tracking-wide px-4 py-2 border border-border text-muted-foreground rounded-full"
@@ -118,12 +117,12 @@ const CodeComparisonSection = () => {
             {activeTab === "consensus" && (
               <div className="absolute top-5 right-5 flex flex-col gap-2">
                 <div className="bg-background border border-border rounded px-3 py-1.5 text-center">
-                  <span className="font-mono text-[9px] text-muted-foreground block">Latency</span>
-                  <span className="font-heading text-sm text-foreground">342ms</span>
+                  <span className="font-mono text-[9px] text-muted-foreground block">Agreement</span>
+                  <span className="font-heading text-sm text-foreground">94%</span>
                 </div>
                 <div className="bg-background border border-border rounded px-3 py-1.5 text-center">
                   <span className="font-mono text-[9px] text-muted-foreground block">Confidence</span>
-                  <span className="font-heading text-sm text-foreground">98%</span>
+                  <span className="font-heading text-sm text-foreground">0.94</span>
                 </div>
               </div>
             )}
@@ -141,10 +140,10 @@ const CodeComparisonSection = () => {
                 <span className="font-mono text-[9px] tracking-[0.2em] text-muted-foreground uppercase">
                   Key Differences
                 </span>
-                <span className="font-mono text-[10px] text-foreground">Consensus verified</span>
+                <span className="font-mono text-[10px] text-foreground">Council verified</span>
               </div>
               <div className="space-y-1.5">
-                {["Agreement ratio: 95%", "Semantic overlap: 97%", "Token consensus: verified"].map((item) => (
+                {["Agreement ratio: 94%", "Semantic overlap: 91%", "Council size: 3 models"].map((item) => (
                   <div key={item} className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-foreground" />
                     <span className="font-mono text-[11px] text-muted-foreground">{item}</span>
@@ -154,15 +153,11 @@ const CodeComparisonSection = () => {
             </motion.div>
           )}
 
-          {/* Bottom bar */}
+          {/* Bottom bar — no fake LIVE indicator */}
           <div className="border-t border-border px-5 py-3 flex items-center justify-between">
             <span className="font-mono text-[9px] text-muted-foreground">
-              Live diff view • latency • token overlap
+              Illustrative example • real responses will vary
             </span>
-            <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-foreground animate-pulse" />
-              <span className="font-mono text-[9px] text-foreground">LIVE</span>
-            </div>
           </div>
         </motion.div>
       </div>

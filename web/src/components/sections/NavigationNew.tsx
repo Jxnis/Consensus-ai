@@ -1,7 +1,8 @@
 import { useTheme } from "../ThemeProvider";
 import { Sun, Moon } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import CouncilLogo from "../CouncilLogo";
+import { useEffect, useState } from "react";
 
 const navLinks = [
   { label: "DOCS", href: "/docs" },
@@ -11,6 +12,30 @@ const navLinks = [
 
 const NavigationNew = () => {
   const { theme, toggleTheme } = useTheme();
+  const [isFullText, setIsFullText] = useState(true);
+
+  // Cycle animation state
+  useEffect(() => {
+    const cycle = async () => {
+      // Stay on "CouncilRouter" for 5 seconds
+      await new Promise(r => setTimeout(r, 5000));
+      setIsFullText(false);
+      
+      // Stay on "CR" for 2 seconds
+      await new Promise(r => setTimeout(r, 2000));
+      setIsFullText(true);
+    };
+
+    // Run loop
+    const interval = setInterval(cycle, 8000); 
+    return () => clearInterval(interval);
+  }, []);
+
+  const textVariants = {
+    hidden: { opacity: 0, x: -5 },
+    visible: { opacity: 1, x: 0 },
+    exit: { opacity: 0, width: 0, transition: { duration: 0.2 } }
+  };
 
   return (
     <motion.nav
@@ -22,7 +47,39 @@ const NavigationNew = () => {
       <div className="max-w-[1400px] mx-auto px-8 h-16 flex items-center justify-between">
         <a href="#" className="flex items-center gap-1 group">
             <CouncilLogo className="w-8 h-8 text-foreground transition-transform duration-500 group-hover:rotate-180" />
-            <span className="font-heading font-bold text-lg tracking-tight">CouncilRouter</span>
+            
+            <div className="font-heading font-bold text-lg tracking-tight flex items-center overflow-hidden h-6">
+              <AnimatePresence mode="wait">
+                {isFullText ? (
+                  <motion.div 
+                    key="full"
+                    initial="hidden" animate="visible" exit="hidden"
+                    variants={{
+                      visible: { transition: { staggerChildren: 0.03 } }
+                    }}
+                    className="flex"
+                  >
+                    {"CouncilRouter".split("").map((char, i) => (
+                      <motion.span key={i} variants={textVariants}>
+                        {char}
+                      </motion.span>
+                    ))}
+                  </motion.div>
+                ) : (
+                  <motion.div 
+                    key="short"
+                    initial="hidden" animate="visible" exit="hidden"
+                    variants={{
+                      visible: { transition: { staggerChildren: 0.1 } }
+                    }}
+                    className="flex"
+                  >
+                    <motion.span variants={textVariants}>C</motion.span>
+                    <motion.span variants={textVariants}>R</motion.span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
         </a>
 
         <div className="hidden md:flex items-center gap-8">

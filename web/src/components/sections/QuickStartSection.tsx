@@ -6,7 +6,7 @@ const QuickStartSection = () => {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
   const [copied, setCopied] = useState(false);
-  const apiUrl = "https://consensus-api.workers.dev/v1/chat/completions";
+  const apiUrl = "https://consensus-api.janis-ellerbrock.workers.dev/v1/chat/completions";
 
   const handleCopy = () => {
     navigator.clipboard.writeText(apiUrl);

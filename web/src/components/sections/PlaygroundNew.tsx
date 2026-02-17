@@ -1,157 +1,99 @@
 import { useState, useRef } from 'react';
 import { motion, useInView } from 'motion/react';
-import { Brain, MessageSquare, Zap, Cpu, Sparkles, Shield, Loader2 } from 'lucide-react';
+import { Brain, Shield, Loader2 } from 'lucide-react';
 
-interface ModelResponse {
-  id: string;
-  name: string;
-  icon: React.ElementType;
-  response: string;
-  confidence: number;
-  status: 'idle' | 'loading' | 'complete';
+interface ModelCard {
+  model: string;
+  answer: string;
+  agrees: boolean;
+  status: 'loading' | 'complete';
 }
 
 const PlaygroundNew = () => {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-50px" });
-  
+
   const [prompt, setPrompt] = useState("");
   const [phase, setPhase] = useState<"idle" | "thinking" | "responding" | "consensus">("idle");
   const [consensusPercent, setConsensusPercent] = useState(0);
   const [showResult, setShowResult] = useState(false);
-  
-  // Consensus result state
+  const [modelCards, setModelCards] = useState<ModelCard[]>([]);
   const [consensusResult, setConsensusResult] = useState({
     response: '',
     agreement: 0,
-    models: 0,
   });
-
-  // Models state (Matching api/src/council/engine.ts fallback free tier)
-  const [models, setModels] = useState<ModelResponse[]>([
-    { id: 'llama-3.1', name: 'Llama 3.1 8B', icon: Brain, response: '', confidence: 0, status: 'idle' },
-    { id: 'gemini-2', name: 'Gemini 2.0 Flash', icon: Zap, response: '', confidence: 0, status: 'idle' },
-    { id: 'llama-3.2', name: 'Llama 3.2 3B', icon: Cpu, response: '', confidence: 0, status: 'idle' },
-    // { id: 'mistral', name: 'Mistral 7B', icon: MessageSquare, response: '', confidence: 0, status: 'idle' },
-    // { id: 'gemma', name: 'Gemma 7B', icon: Sparkles, response: '', confidence: 0, status: 'idle' },
-  ]);
+  const [error, setError] = useState<string | null>(null);
 
   const handleRunConsensus = async () => {
     if (!prompt.trim() || phase !== 'idle') return;
 
-    // 1. Start Thinking Phase
     setPhase("thinking");
     setShowResult(false);
     setConsensusPercent(0);
-    
-    // Reset models to loading/idle
-    setModels(prev => prev.map(m => ({ ...m, status: 'loading', response: '', confidence: 0 })));
+    setModelCards([]);
+    setError(null);
 
     try {
-      // 2. API Call
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787';
-      const response = await fetch(`${apiUrl}/v1/chat/completions`, {
+      const response = await fetch('/api/proxy', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer sk_demo_consensus_2024',
-          'X-Source': 'consensus-playground' // Identify source
-        },
-        body: JSON.stringify({ 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
-          budget: 'free', // Use free tier explicitly
+          budget: 'free',
         }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const finalResponse = data.choices?.[0]?.message?.content || 'Verified Response';
-        const votes = data.consensus?.votes || [];
-        const agreementScore = data.consensus?.confidence || 0.98;
-
-        // 3. Update Models & Transition to Responding
-        setPhase("responding");
-        
-        // Update models with real data
-        setModels(prev => prev.map((m, idx) => {
-          const vote = votes[idx];
-          return {
-            ...m,
-            status: 'complete',
-            response: vote?.answer || finalResponse, // Fallback if individual votes missing
-            confidence: vote?.agrees ? 0.95 : 0.7
-          };
-        }));
-        
-        setConsensusResult({
-          response: finalResponse,
-          agreement: agreementScore,
-          models: votes.length || 5
-        });
-
-        // 4. Animate Consensus Bar
-        setTimeout(() => {
-          setPhase("consensus");
-          let p = 0;
-          const target = Math.floor(agreementScore * 100);
-          const interval = setInterval(() => {
-            p += 2;
-            setConsensusPercent(Math.min(p, target));
-            if (p >= target) {
-              clearInterval(interval);
-              setShowResult(true);
-              setPhase("idle"); // Reset to allow running again, but keep results shown
-            }
-          }, 20);
-        }, 1500); // Wait a bit for user to read individual responses
-
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: string };
+        setError(data.error || 'Something went wrong. Try again.');
+        setPhase("idle");
         return;
       }
-    } catch (e) {
-      console.log("[Playground] API error, using simulation fallback");
-    }
 
-    // --- Simulation Fallback (Original Logic Adapted) ---
-    const sampleResponses = [
-      "Consensus reached: The prompt relates to high-stakes decision making.",
-      "Consensus confirmed: This appears to be about critical decision processes.",
-      "Agreement found: The query concerns important choice-making scenarios.",
-      "Verified: Question is about high-stakes decision frameworks.",
-      "Consensus: Topic is related to critical decision-making methodologies."
-    ];
+      const data = await response.json() as {
+        choices?: Array<{ message?: { content?: string } }>;
+        consensus?: {
+          confidence?: number;
+          votes?: Array<{ model: string; answer: string; agrees: boolean }>;
+        };
+      };
 
-    // Simulate network delay then showing responses
-    setTimeout(() => {
+      const finalResponse = data.choices?.[0]?.message?.content || '';
+      const votes = data.consensus?.votes || [];
+      const agreementScore = data.consensus?.confidence || 0;
+
+      // Build model cards from real API response
+      const cards: ModelCard[] = votes.map(v => ({
+        model: v.model,
+        answer: v.answer,
+        agrees: v.agrees,
+        status: 'complete' as const,
+      }));
+
       setPhase("responding");
-      setModels(prev => prev.map((m, i) => ({
-        ...m,
-        status: 'complete',
-        response: sampleResponses[i] || "Verified response.",
-        confidence: 0.95
-      })));
+      setModelCards(cards);
+      setConsensusResult({ response: finalResponse, agreement: agreementScore });
 
-      setConsensusResult({
-        response: 'The Council has verified this request: All models agree the topic is about high-stakes decision-making processes.',
-        agreement: 0.98,
-        models: 5,
-      });
-
-      // Animate consensus
+      // Animate consensus bar
       setTimeout(() => {
         setPhase("consensus");
+        const target = Math.round(agreementScore * 100);
         let p = 0;
         const interval = setInterval(() => {
           p += 2;
-          setConsensusPercent(p);
-          if (p >= 98) {
+          setConsensusPercent(Math.min(p, target));
+          if (p >= target) {
             clearInterval(interval);
             setShowResult(true);
             setPhase("idle");
           }
         }, 20);
-      }, 1000);
+      }, 1200);
 
-    }, 1500);
+    } catch {
+      setError('Network error. Check your connection and try again.');
+      setPhase("idle");
+    }
   };
 
   return (
@@ -172,7 +114,7 @@ const PlaygroundNew = () => {
           </h2>
         </motion.div>
 
-        {/* Input Area */}
+        {/* Input */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -184,7 +126,7 @@ const PlaygroundNew = () => {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleRunConsensus()}
-            placeholder="Ask anything..."
+            placeholder="Ask anything — free tier, no signup needed"
             disabled={phase !== 'idle'}
             className="flex-1 font-mono text-[12px] bg-transparent border border-border px-6 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors duration-500 disabled:opacity-50"
           />
@@ -197,51 +139,55 @@ const PlaygroundNew = () => {
           </button>
         </motion.div>
 
-        {/* Model Cards Grid */}
-        {(phase !== 'idle' || showResult) && (
-        <div className="grid md:grid-cols-3 gap-6 mb-10 max-w-4xl mx-auto">
-            {models.map((model, i) => (
+        {/* Error state */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="max-w-2xl mx-auto mb-8 px-6 py-4 border border-destructive/30 bg-destructive/5"
+          >
+            <p className="font-mono text-[11px] text-destructive">{error}</p>
+          </motion.div>
+        )}
+
+        {/* Loading state */}
+        {phase === 'thinking' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center mb-12"
+          >
+            <p className="font-mono text-[11px] text-muted-foreground tracking-widest uppercase">
+              Querying the council...
+            </p>
+          </motion.div>
+        )}
+
+        {/* Dynamic Model Cards — rendered from API response */}
+        {modelCards.length > 0 && (
+          <div className={`grid gap-6 mb-10 max-w-4xl mx-auto ${modelCards.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+            {modelCards.map((card, i) => (
               <motion.div
-                key={model.id}
+                key={`${card.model}-${i}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: i * 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className={`border border-border p-6 flex flex-col justify-between min-h-[200px] bg-card`}
+                transition={{ duration: 0.5, delay: i * 0.08 }}
+                className="border border-border p-6 flex flex-col justify-between min-h-[200px] bg-card"
               >
-                <div className="flex items-center gap-3 mb-4">
-                   {/* Icon */}
-                   <model.icon className="w-4 h-4 text-muted-foreground" />
-                   <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase">{model.name}</span>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-3 h-3 text-muted-foreground" />
+                    <span className="font-mono text-[10px] tracking-[0.15em] text-muted-foreground uppercase truncate max-w-[140px]">
+                      {card.model}
+                    </span>
+                  </div>
+                  <span className={`font-mono text-[9px] tracking-widest uppercase ${card.agrees ? 'text-emerald-600' : 'text-muted-foreground/60'}`}>
+                    {card.agrees ? 'agrees' : 'dissents'}
+                  </span>
                 </div>
-                
-                {model.status === 'loading' ? (
-                   <div className="flex gap-1.5 self-center my-auto">
-                     {[0, 1, 2].map((d) => (
-                       <motion.div
-                         key={d}
-                         animate={{ opacity: [0.2, 1, 0.2] }}
-                         transition={{ repeat: Infinity, duration: 1.2, delay: d * 0.15 }}
-                         className="w-1 h-1 rounded-full bg-muted-foreground"
-                       />
-                     ))}
-                   </div>
-                ) : (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex-1 flex flex-col"
-                  >
-                    <p className="font-mono text-[10px] text-foreground leading-[1.6] line-clamp-6">
-                      {model.response}
-                    </p>
-                    {model.confidence > 0 && (
-                      <div className="mt-auto pt-4 border-t border-border/50 flex justify-between items-center">
-                        <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Confidence</span>
-                        <span className="text-[10px] font-mono text-emerald-600">{(model.confidence * 100).toFixed(0)}%</span>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
+                <p className="font-mono text-[10px] text-foreground leading-[1.7] line-clamp-6">
+                  {card.answer}
+                </p>
               </motion.div>
             ))}
           </div>
@@ -272,22 +218,22 @@ const PlaygroundNew = () => {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
+            transition={{ duration: 0.6 }}
             className="border border-foreground p-8 max-w-3xl mx-auto bg-card"
           >
             <div className="flex items-center gap-3 mb-4">
               <Shield className="w-4 h-4 text-foreground" />
               <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-foreground">
-                Verified Truth
+                Council Consensus
               </span>
             </div>
             <p className="font-heading text-xl md:text-2xl text-foreground leading-relaxed">
               {consensusResult.response}
             </p>
             <div className="mt-6 pt-6 border-t border-border flex justify-between items-center">
-               <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
-                 Agreement across {models.length} models
-               </span>
+              <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
+                {modelCards.length} model{modelCards.length !== 1 ? 's' : ''} • {Math.round(consensusResult.agreement * 100)}% agreement
+              </span>
             </div>
           </motion.div>
         )}

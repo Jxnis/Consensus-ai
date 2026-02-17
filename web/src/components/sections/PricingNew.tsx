@@ -1,6 +1,5 @@
 import { motion, useInView } from "motion/react";
 import { useRef } from "react";
-import { Building2 } from "lucide-react";
 
 const plans = [
   {
@@ -9,11 +8,11 @@ const plans = [
     price: "$0",
     period: "/ forever",
     features: [
-      "3 free-tier models",
+      "3 open-source models",
       "Consensus verification",
       "20 requests / hour",
       "No API key required",
-      "Community support",
+      "Community Discord",
     ],
     cta: "Get Started",
     highlighted: false,
@@ -34,19 +33,19 @@ const plans = [
     highlighted: true,
   },
   {
-    name: 'Enterprise',
-    subtitle: 'Legal & Compliance',
-    price: 'Custom',
-    period: '',
+    name: "Team",
+    subtitle: "Custom needs? Let's talk",
+    price: "Custom",
+    period: "",
     features: [
-      'Custom model selection',
-      'Audit trail & logging',
-      'Dedicated SLA',
-      'White-glove support',
-      'Self-hosted option',
+      "Custom model selection",
+      "Higher rate limits",
+      "Priority support",
+      "Usage analytics",
+      "Contact for pricing",
     ],
-    cta: 'Contact Sales',
-    href: 'mailto:sales@councilrouter.ai',
+    cta: "Contact Us",
+    href: "mailto:hello@councilrouter.ai",
     highlighted: false,
   },
 ];
@@ -92,7 +91,7 @@ const PricingNew = () => {
               <div className="mt-8 mb-8">
                 <span className="font-heading text-5xl lg:text-6xl text-foreground flex items-baseline">
                     {plan.price}
-                    {plan.price !== 'Custom' && <span className="text-2xl ml-1 tracking-tighter"></span>}
+                    {plan.price !== "Custom" && <span className="text-2xl ml-1 tracking-tighter"></span>}
                 </span>
                 <span className="font-mono text-[11px] text-muted-foreground ml-1">{plan.period}</span>
               </div>

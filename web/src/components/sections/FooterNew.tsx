@@ -11,7 +11,7 @@ const FooterNew = () => (
         <a href="/docs" className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors duration-300 uppercase">
           Docs
         </a>
-        <a href="#" className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors duration-300 uppercase">
+        <a href="https://github.com/councilrouter" className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors duration-300 uppercase">
           GitHub
         </a>
       </div>
