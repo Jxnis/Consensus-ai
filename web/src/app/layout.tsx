@@ -1,6 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Outfit, JetBrains_Mono, Manrope } from 'next/font/google'
+import { Outfit, JetBrains_Mono, Manrope, Space_Grotesk } from 'next/font/google'
 import { ThemeProvider } from '@/components/ThemeProvider'
 
 const outfit = Outfit({ 
@@ -18,15 +18,20 @@ const manrope = Manrope({
   variable: '--font-manrope',
 })
 
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
+})
+
 export const metadata: Metadata = {
-  metadataBase: new URL('https://consensuscloud.ai'),
-  title: 'Consensus Cloud | Multi-Model Consensus Routing for AI',
-  description: 'Get GPT-4 level reliability at a fraction of the cost. The world\'s first verified LLM router. Multiple models, one consensus.',
+  metadataBase: new URL('https://councilrouter.ai'),
+  title: 'CouncilRouter | Multi-Model Consensus Routing for AI',
+  description: "Get GPT-4 level reliability at a fraction of the cost. The world\'s first verified LLM router. Multiple models, one consensus.",
   openGraph: {
-    title: 'Consensus Cloud',
-    description: 'Multiple Models. One Consensus. The Trust Layer for AI.',
-    url: 'https://consensuscloud.ai',
-    siteName: 'Consensus Cloud',
+    title: 'CouncilRouter',
+    description: "Multiple Models. One Consensus. The Trust Layer for AI.",
+    url: 'https://councilrouter.ai',
+    siteName: 'CouncilRouter',
     images: [
       {
         url: '/og-image.png',
@@ -39,8 +44,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Consensus Cloud | Multi-Model Consensus Routing',
-    description: 'Get GPT-4 level reliability at a fraction of the cost. Multiple models, one consensus.',
+    title: 'CouncilRouter | Verified LLM Consensus',
+    description: "Get GPT-4 level reliability at a fraction of the cost. Multiple models, one consensus.",
     images: ['/og-image.png'],
   },
 }
@@ -51,7 +56,10 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${outfit.variable} ${jetbrains.variable} ${manrope.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${outfit.variable} ${jetbrains.variable} ${manrope.variable} ${spaceGrotesk.variable}`} suppressHydrationWarning>
+      <head>
+        <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet" />
+      </head>
       <body className="font-sans antialiased">
         <ThemeProvider>
           {children}

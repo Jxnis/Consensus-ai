@@ -1,47 +1,32 @@
 "use client";
 
-import Navigation from '@/components/sections/Navigation';
-import HeroSection from '@/components/sections/HeroSection';
-import StickyDashboardSection from '@/components/sections/StickyDashboardSection';
-import HowItWorksCarousel from '@/components/sections/HowItWorksCarousel';
-import TerminalSection from '@/components/sections/TerminalSection';
-import PlaygroundSection from '@/components/sections/PlaygroundSection';
-import ExpandingStackedCards from '@/components/sections/ExpandingStackedCards';
-import PricingSection from '@/components/sections/PricingSection';
-import FooterSection from '@/components/sections/FooterSection';
+import { ThemeProvider } from "@/components/ThemeProvider";
+import NavigationNew from "@/components/sections/NavigationNew";
+import HeroNew from "@/components/sections/HeroNew";
+import QuickStartSection from "@/components/sections/QuickStartSection";
+import HowItWorksNew from "@/components/sections/HowItWorksNew";
+import StatsSection from "@/components/sections/StatsSection";
+import CodeComparisonSection from "@/components/sections/CodeComparisonSection";
+import AbstractCirclesSection from "@/components/sections/AbstractCirclesSection";
+import PlaygroundNew from "@/components/sections/PlaygroundNew";
+import PricingNew from "@/components/sections/PricingNew";
+import FooterNew from "@/components/sections/FooterNew";
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#f5f5f4] selection:bg-[#2835f8]/20 overflow-x-hidden">
-      <Navigation />
-      
-      <main>
-        {/* Airy Hero Section */}
-        <HeroSection />
-        
-        {/* Parallax Expanding Dashboard */}
-        <StickyDashboardSection />
-        
-        {/* Feature Carousel (Phantom style) */}
-        <HowItWorksCarousel />
-        
-        {/* Stable Comparison Section */}
-        <TerminalSection />
-        
-        {/* Interactive Playground */}
-        <div id="products">
-          <PlaygroundSection />
-        </div>
-        
-        {/* Expanding Stacked Cards (Performance) */}
-        <ExpandingStackedCards />
-        
-        {/* Pricing */}
-        <PricingSection />
-        
-        {/* Circular Reveal Footer */}
-        <FooterSection />
+    <ThemeProvider>
+       <main className="bg-background min-h-screen selection:bg-foreground selection:text-background transition-colors duration-500 overflow-x-hidden">
+        <NavigationNew />
+        <HeroNew />
+        <QuickStartSection />
+        <HowItWorksNew />
+        <StatsSection />
+        <CodeComparisonSection />
+        <AbstractCirclesSection />
+        <PlaygroundNew />
+        <PricingNew />
+        <FooterNew />
       </main>
-    </div>
+    </ThemeProvider>
   );
 }

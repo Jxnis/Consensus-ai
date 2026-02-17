@@ -44,7 +44,7 @@ export function scorePrompt(prompt: string): ComplexityScore {
   // Determine Tier (Refined thresholds)
   let tier: ComplexityTier = "SIMPLE";
   if (score > 35) tier = "COMPLEX";      // Was 40
-  else if (score > 8) tier = "MEDIUM";   // Was 10
+  else if (score > 12) tier = "MEDIUM";  // Raised from 8 to reduce over-classification
 
   return {
     tier,
