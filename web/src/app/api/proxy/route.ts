@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'edge';
-
 // Simple in-memory rate limiter for the playground
 // Keyed by a session identifier derived from request headers
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
