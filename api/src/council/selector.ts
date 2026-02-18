@@ -41,27 +41,27 @@ export class CouncilSelector {
 
     switch (tier) {
       case "SIMPLE":
-        // 2-3 cheap/free models
+        // Select 8 models to race — target 3 responses (free models have ~50% failure rate)
         selected = this.pickRandom(
-          freeModels.length >= 3 ? freeModels : [...freeModels, ...cheapModels], 
-          3
+          [...freeModels, ...cheapModels],
+          8
         );
         break;
 
       case "MEDIUM":
-        // 4-5 models: mix of cheap + 1 smart
+        // 6 models: 3 cheap + 1 smart + 2 free — target 3 responses
         selected = [
           ...this.pickRandom(cheapModels.length > 0 ? cheapModels : freeModels, 3),
           ...this.pickRandom(smartModels.length > 0 ? smartModels : cheapModels, 1),
-          ...this.pickRandom(freeModels, 1),
+          ...this.pickRandom(freeModels, 2),
         ];
         break;
 
       case "COMPLEX":
-        // 5 models: 2 cheap + 3 smart — NO premium models
+        // 6 models: 2 cheap + 4 smart — target 4 responses
         selected = [
           ...this.pickRandom(cheapModels.length > 0 ? cheapModels : freeModels, 2),
-          ...this.pickRandom(smartModels.length > 0 ? smartModels : cheapModels, 3),
+          ...this.pickRandom(smartModels.length > 0 ? smartModels : cheapModels, 4),
         ];
         break;
     }
@@ -74,9 +74,11 @@ export class CouncilSelector {
       return true;
     });
 
-    // Fallback: if logic fails, grab cheapest available
-    if (selected.length < 2) {
-      selected = candidates.sort((a, b) => a.pricePer1M - b.pricePer1M).slice(0, 3);
+    // Fallback: ensure minimum 3 models in the council
+    if (selected.length < 3) {
+      const remaining = candidates.filter(m => !seen.has(m.id));
+      const needed = 3 - selected.length;
+      selected.push(...remaining.sort((a, b) => a.pricePer1M - b.pricePer1M).slice(0, needed));
     }
 
     return selected;

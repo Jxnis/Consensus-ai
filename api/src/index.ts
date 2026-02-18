@@ -133,25 +133,50 @@ app.use("/v1/chat/completions", async (c, next) => {
   // Budget explicitly set (e.g. "low", "medium", "high") but no auth → enforce x402
   console.log(`[Auth] Unauthenticated request with budget="${budget}". Enforcing x402.`);
 
-  const dynamicHandler = paymentMiddleware(
-    {
-      "POST /v1/chat/completions": {
-        accepts: [
-          {
-            scheme: "exact",
-            price: "$0.002",
-            network: "eip155:8453", // Base Mainnet
-            payTo: c.env.X402_WALLET_ADDRESS,
-          },
-        ],
-        description: "CouncilRouter — multi-model consensus verification",
-        mimeType: "application/json",
-      },
-    },
-    x402Server
-  );
+  if (!c.env.X402_WALLET_ADDRESS) {
+    return c.json({
+      error: "Payment required",
+      message: "x402 payment is not configured on this server. Use budget='free' or authenticate with an API key.",
+    }, 402);
+  }
 
-  return dynamicHandler(c, next);
+  try {
+    const dynamicHandler = paymentMiddleware(
+      {
+        "POST /v1/chat/completions": {
+          accepts: [
+            {
+              scheme: "exact",
+              price: "$0.002",
+              network: "eip155:8453", // Base Mainnet
+              payTo: c.env.X402_WALLET_ADDRESS,
+            },
+          ],
+          description: "CouncilRouter — multi-model consensus verification",
+          mimeType: "application/json",
+        },
+      },
+      x402Server
+    );
+
+    return await dynamicHandler(c, next);
+  } catch (error: unknown) {
+    // x402 facilitator may not support mainnet yet — return manual 402 instead of 500
+    console.error("[x402] Middleware error:", error instanceof Error ? error.message : String(error));
+    return c.json({
+      error: "Payment required",
+      x402: {
+        version: 2,
+        accepts: [{
+          scheme: "exact",
+          price: "$0.002",
+          network: "eip155:8453",
+          payTo: c.env.X402_WALLET_ADDRESS,
+        }],
+        description: "CouncilRouter — multi-model consensus verification. Send x402 payment headers or use budget='free' for free tier.",
+      },
+    }, 402);
+  }
 });
 
 // Main Endpoint: Run consensus logic

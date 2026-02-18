@@ -32,10 +32,15 @@ export class CouncilEngine {
       return { ...(JSON.parse(cached) as ConsensusResponse), cached: true };
     }
 
-    // 1. Get model registry (with fallback)
+    // 1. Get model registry — merge crawled + reliable fallback models
     let allModels: ModelInfo[];
     try {
-      allModels = await ModelCrawler.getModels(this.kv, this.apiKey);
+      const crawledModels = await ModelCrawler.getModels(this.kv, this.apiKey);
+      // Merge: fallback models ensure reliability, crawled models add variety
+      const fallbackModels = this.getFallbackModels();
+      const crawledIds = new Set(crawledModels.map(m => m.id));
+      const uniqueFallbacks = fallbackModels.filter(m => !crawledIds.has(m.id));
+      allModels = [...crawledModels, ...uniqueFallbacks];
     } catch (error) {
       console.error("[CouncilEngine] OpenRouter API failed. Using fallback model list.", error);
       allModels = this.getFallbackModels();
@@ -49,10 +54,11 @@ export class CouncilEngine {
     }
 
     // 3. Race models in parallel
-    console.log(`[CouncilEngine] Council for "${tier}" request:`);
+    console.log(`[CouncilEngine] Council for "${tier}" request (${selectedModels.length} models):`);
     selectedModels.forEach(m => console.log(`  - ${m.name} | $${m.pricePer1M.toFixed(4)}/1M`));
 
-    const targetCount = tier === "SIMPLE" ? 2 : 3;
+    // Minimum 3 responses for all tiers — a "council" of 1-2 is meaningless
+    const targetCount = tier === "COMPLEX" ? 4 : 3;
     const results = await this.raceModels(prompt, selectedModels, targetCount);
 
     if (results.length === 0) {
@@ -161,21 +167,31 @@ export class CouncilEngine {
       let activeRequests = models.length;
       let isResolved = false;
 
+      // Hard timeout — resolve with whatever we have
       const timeout = setTimeout(() => {
         if (!isResolved) {
-          console.log(`[CouncilEngine] Racing timeout after 15s. Got ${results.length} results.`);
+          console.log(`[CouncilEngine] Racing timeout after 20s. Got ${results.length}/${targetCount} results.`);
           controller.abort();
           isResolved = true;
           resolve(results);
         }
-      }, 15000);
+      }, 20000);
 
       const tryResolve = () => {
         if (isResolved) return;
-        if (results.length >= targetCount || activeRequests === 0) {
+        // Resolve immediately once we hit targetCount
+        if (results.length >= targetCount) {
           clearTimeout(timeout);
           controller.abort();
           isResolved = true;
+          resolve(results);
+          return;
+        }
+        // All requests finished but below target — resolve with what we have
+        if (activeRequests === 0) {
+          clearTimeout(timeout);
+          isResolved = true;
+          console.log(`[CouncilEngine] All models finished. Got ${results.length}/${targetCount} results.`);
           resolve(results);
         }
       };
@@ -188,10 +204,10 @@ export class CouncilEngine {
           max_tokens: 1000,
         }, { signal: controller.signal }).then(response => {
           if (controller.signal.aborted) return;
-          results.push({
-            model: model.name,
-            answer: response.choices[0]?.message?.content || ""
-          });
+          const content = response.choices[0]?.message?.content || "";
+          if (content.trim()) {
+            results.push({ model: model.name, answer: content });
+          }
           tryResolve();
         }).catch(err => {
           if (err.name === "AbortError") return;
@@ -206,15 +222,20 @@ export class CouncilEngine {
 
   private getFallbackModels(): ModelInfo[] {
     return [
-      { id: "meta-llama/llama-3.1-8b-instruct:free", name: "Llama 3.1 8B", provider: "Meta", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 8192 },
-      { id: "google/gemini-2.0-flash-thinking-exp:free", name: "Gemini 2.0 Flash", provider: "Google", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 32768 },
+      // Reliable free models (updated 2026-02-18)
+      { id: "google/gemma-3-12b-it:free", name: "Gemma 3 12B", provider: "Google", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 32768 },
+      { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B", provider: "Meta", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 131072 },
       { id: "meta-llama/llama-3.2-3b-instruct:free", name: "Llama 3.2 3B", provider: "Meta", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 8192 },
+      { id: "qwen/qwen3-4b:free", name: "Qwen3 4B", provider: "Qwen", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 32768 },
+      { id: "mistralai/mistral-small-3.1-24b-instruct:free", name: "Mistral Small 3.1 24B", provider: "Mistral", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 32768 },
+      { id: "deepseek/deepseek-r1-0528:free", name: "DeepSeek R1", provider: "DeepSeek", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 65536 },
+      { id: "nvidia/nemotron-nano-9b-v2:free", name: "Nemotron Nano 9B", provider: "NVIDIA", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 32768 },
+      // Cheap paid models
       { id: "openai/gpt-4o-mini", name: "GPT-4o mini", provider: "OpenAI", pricePer1M: 0.15, inputPrice: 0.15, outputPrice: 0.60, isFree: false, contextLength: 128000 },
-      { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku", provider: "Anthropic", pricePer1M: 0.25, inputPrice: 0.25, outputPrice: 1.25, isFree: false, contextLength: 200000 },
       { id: "google/gemini-flash-1.5", name: "Gemini 1.5 Flash", provider: "Google", pricePer1M: 0.075, inputPrice: 0.075, outputPrice: 0.30, isFree: false, contextLength: 1000000 },
+      { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku", provider: "Anthropic", pricePer1M: 0.25, inputPrice: 0.25, outputPrice: 1.25, isFree: false, contextLength: 200000 },
       { id: "meta-llama/llama-3.1-70b-instruct", name: "Llama 3.1 70B", provider: "Meta", pricePer1M: 0.35, inputPrice: 0.35, outputPrice: 0.40, isFree: false, contextLength: 131072 },
       { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", pricePer1M: 2.50, inputPrice: 2.50, outputPrice: 10.0, isFree: false, contextLength: 128000 },
-      { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", provider: "Anthropic", pricePer1M: 3.0, inputPrice: 3.0, outputPrice: 15.0, isFree: false, contextLength: 200000 },
       { id: "google/gemini-pro-1.5", name: "Gemini 1.5 Pro", provider: "Google", pricePer1M: 1.25, inputPrice: 1.25, outputPrice: 5.0, isFree: false, contextLength: 2000000 },
     ];
   }
