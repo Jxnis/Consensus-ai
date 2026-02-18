@@ -19,7 +19,7 @@ export default function DocsPage() {
   const [activeSection, setActiveSection] = useState("introduction");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const apiUrl = "https://consensus-api.janis-ellerbrock.workers.dev/v1/chat/completions";
+  const apiUrl = "https://consensus-api.janis-ellerbrock.workers.dev/v1";
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(apiUrl);
@@ -107,7 +107,7 @@ export default function DocsPage() {
               <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-[0.2em] block">Documentation</span>
               <h1 className="font-heading text-4xl lg:text-5xl text-foreground tracking-tight">CouncilRouter Docs</h1>
               <p className="text-muted-foreground leading-relaxed max-w-2xl text-lg">
-                The world's first verified LLM router. Access the intelligence of multiple models through a single, OpenAI-compatible API endpoint.
+                A multi-model consensus router. Query multiple LLMs in parallel, compare their answers, and return the majority-agreed response — through a single, OpenAI-compatible API endpoint.
               </p>
               <div className="flex gap-4 pt-4">
                 <button 
@@ -117,7 +117,7 @@ export default function DocsPage() {
                   Start Building
                 </button>
                 <a 
-                  href="https://github.com/consensus-labs/council-router"
+                  href="https://github.com/councilrouter"
                   className="px-6 py-3 border border-border text-foreground font-mono text-xs uppercase tracking-wider rounded-lg hover:bg-foreground/5 transition-colors"
                 >
                     View on GitHub
@@ -196,7 +196,7 @@ main();`}
                             <span className="text-blue-500 text-xs font-bold">02</span>
                         </div>
                         <h3 className="font-heading text-lg mb-2">Developer Key</h3>
-                        <p className="text-sm text-muted-foreground mb-4">10k req/hour. Monthly invoice.</p>
+                        <p className="text-sm text-muted-foreground mb-4">10k req/hour. $0.002 per request.</p>
                         <code className="text-xs bg-muted px-2 py-1 rounded">Authorization: Bearer sk_...</code>
                     </div>
                 </div>
@@ -229,7 +229,7 @@ main();`}
                                 <td className="p-4 text-muted-foreground">10,000 / hr</td>
                             </tr>
                             <tr>
-                                <td className="p-4 font-bold">Enterprise</td>
+                                <td className="p-4 font-bold">Team</td>
                                 <td className="p-4 text-muted-foreground">Custom</td>
                                 <td className="p-4 text-muted-foreground">Unlimited</td>
                             </tr>
