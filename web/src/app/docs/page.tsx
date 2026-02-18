@@ -226,7 +226,7 @@ main();`}
                             <tr>
                                 <td className="p-4 font-bold text-foreground">Developer</td>
                                 <td className="p-4 text-muted-foreground">$0.002 / req</td>
-                                <td className="p-4 text-muted-foreground">10,000 / hr</td>
+                                <td className="p-4 text-muted-foreground">1,000 / hr</td>
                             </tr>
                             <tr>
                                 <td className="p-4 font-bold">Team</td>

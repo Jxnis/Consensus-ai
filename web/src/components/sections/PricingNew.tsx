@@ -45,7 +45,7 @@ const plans = [
       "Contact for pricing",
     ],
     cta: "Contact Us",
-    href: "mailto:hello@councilrouter.ai",
+    href: "mailto:janis.ellerbrock@gmail.com",
     highlighted: false,
   },
 ];
