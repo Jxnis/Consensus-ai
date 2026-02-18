@@ -58,9 +58,9 @@ app.use("/v1/*", async (c, next) => {
   return await next();
 });
 
-// x402 Payment Middleware setup
+// x402 Payment Middleware setup — Coinbase CDP mainnet facilitator
 const facilitatorClient = new HTTPFacilitatorClient({
-  url: "https://x402.org/facilitator"
+  url: "https://api.cdp.coinbase.com/platform/v2/x402"
 });
 
 const x402Server = new x402ResourceServer(facilitatorClient);
