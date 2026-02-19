@@ -23,9 +23,11 @@ export class CouncilEngine {
     tier: ComplexityTier
   ): Promise<ConsensusResponse> {
     const { prompt } = request;
+    const normalizedBudget = request.budget ?? "free";
 
     // 0. Cache lookup
-    const cacheKey = await this.hashPrompt(prompt);
+    const cacheScope = `${prompt}::${normalizedBudget}::${tier}`;
+    const cacheKey = await this.hashPrompt(cacheScope);
     const cached = await this.kv.get(cacheKey);
     if (cached) {
       console.log(`[CouncilEngine] Cache HIT for prompt hash: ${cacheKey.slice(0, 8)}`);
@@ -47,18 +49,22 @@ export class CouncilEngine {
     }
 
     // 2. Select council
-    const selectedModels = CouncilSelector.selectModels(allModels, tier, request);
+    let selectedModels = CouncilSelector.selectModels(allModels, tier, request);
 
     if (selectedModels.length === 0) {
       throw new Error("No suitable models found for this request.");
     }
+
+    // 2.5 Budget guardrails — downshift to cheaper models if estimated cost breaches budget policy.
+    selectedModels = this.applyBudgetGuardrails(selectedModels, allModels, prompt, normalizedBudget);
 
     // 3. Race models in parallel
     console.log(`[CouncilEngine] Council for "${tier}" request (${selectedModels.length} models):`);
     selectedModels.forEach(m => console.log(`  - ${m.name} | $${m.pricePer1M.toFixed(4)}/1M`));
 
     // Minimum 3 responses for all tiers — a "council" of 1-2 is meaningless
-    const targetCount = tier === "COMPLEX" ? 4 : 3;
+    const baseTargetCount = tier === "COMPLEX" ? 4 : 3;
+    const targetCount = Math.min(baseTargetCount, selectedModels.length);
     const results = await this.raceModels(prompt, selectedModels, targetCount);
 
     if (results.length === 0) {
@@ -105,6 +111,7 @@ export class CouncilEngine {
     let finalAnswer = topGroup.answer;
     let confidence = topGroup.count / results.length;
     let modelUsed = topGroup.models[0];
+    let synthesized = false;
 
     if (confidence < 0.6 && tier !== "SIMPLE" && request.budget !== "free") {
       console.log(`[CouncilEngine] Low confidence (${confidence.toFixed(2)}). Escalating to Chairman...`);
@@ -125,13 +132,14 @@ export class CouncilEngine {
       });
 
       finalAnswer = chairmanResponse.choices[0]?.message?.content || finalAnswer;
-      confidence = 0.80;
       modelUsed = "CHAIRMAN (Gemini 2.0 Flash)";
+      synthesized = true;
     }
 
     const consensusResponse: ConsensusResponse = {
       answer: finalAnswer,
       confidence,
+      ...(synthesized ? { synthesized: true } : {}),
       votes: votesWithAgreement,
       complexity: tier,
       cached: false,
@@ -153,6 +161,63 @@ export class CouncilEngine {
     const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  private applyBudgetGuardrails(
+    selectedModels: ModelInfo[],
+    allModels: ModelInfo[],
+    prompt: string,
+    budget: "free" | "low" | "medium" | "high"
+  ): ModelInfo[] {
+    const capByBudget: Record<"free" | "low" | "medium" | "high", number> = {
+      free: 0,
+      low: 0.003,
+      medium: 0.02,
+      high: 0.08,
+    };
+
+    if (budget === "free") return selectedModels;
+
+    const cap = capByBudget[budget];
+    const estimated = this.estimateCouncilCost(selectedModels, prompt);
+    if (estimated <= cap) return selectedModels;
+
+    const minCouncilSize = 3;
+    const candidatePool = [...allModels]
+      .sort((a, b) => a.pricePer1M - b.pricePer1M);
+
+    const downshifted: ModelInfo[] = [];
+    for (const model of candidatePool) {
+      if (downshifted.some(m => m.id === model.id)) continue;
+      downshifted.push(model);
+      if (downshifted.length >= selectedModels.length) break;
+    }
+
+    if (downshifted.length < minCouncilSize) {
+      throw new Error("[BUDGET_GUARDRAIL] Budget policy cannot satisfy minimum council size.");
+    }
+
+    const trimmed = downshifted.slice(0, Math.max(minCouncilSize, Math.min(selectedModels.length, downshifted.length)));
+    const trimmedEstimated = this.estimateCouncilCost(trimmed, prompt);
+    if (trimmedEstimated > cap) {
+      throw new Error("[BUDGET_GUARDRAIL] Estimated request cost exceeds budget policy.");
+    }
+
+    console.log(
+      `[CouncilEngine] Budget guardrail downshift: est $${estimated.toFixed(6)} -> $${trimmedEstimated.toFixed(6)} for budget=${budget}.`
+    );
+    return trimmed;
+  }
+
+  private estimateCouncilCost(models: ModelInfo[], prompt: string): number {
+    const estimatedInputTokens = Math.max(1, Math.ceil(prompt.length / 4));
+    const estimatedOutputTokens = 600;
+
+    return models.reduce((sum, model) => {
+      const inputCost = (estimatedInputTokens / 1_000_000) * model.inputPrice;
+      const outputCost = (estimatedOutputTokens / 1_000_000) * model.outputPrice;
+      return sum + inputCost + outputCost;
+    }, 0);
   }
 
   private async raceModels(

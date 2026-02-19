@@ -27,6 +27,7 @@ export interface ConsensusRequest {
 export interface ConsensusResponse {
   answer: string;
   confidence: number;
+  synthesized?: boolean;
   votes: {
     model: string;
     answer: string;

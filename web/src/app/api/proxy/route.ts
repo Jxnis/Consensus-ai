@@ -65,6 +65,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const isStreamRequest =
+    body !== null &&
+    typeof body === 'object' &&
+    (body as Record<string, unknown>).stream === true;
+
   try {
     // 20s timeout — generous for multi-model consensus
     const controller = new AbortController();
@@ -81,6 +86,7 @@ export async function POST(req: NextRequest) {
       signal: controller.signal,
     });
 
+    // timeout cleared on first byte — stream body continues to pipe after this
     clearTimeout(timeout);
 
     if (!backendResponse.ok) {
@@ -96,6 +102,18 @@ export async function POST(req: NextRequest) {
         { error: 'Request failed. Please try again.' },
         { status: status >= 500 ? 502 : status }
       );
+    }
+
+    // SSE streaming passthrough — pipe without buffering (50e)
+    if (isStreamRequest && backendResponse.headers.get('content-type')?.includes('text/event-stream')) {
+      return new Response(backendResponse.body, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'X-Accel-Buffering': 'no',
+          'X-RateLimit-Remaining': String(remaining),
+        },
+      });
     }
 
     const data = await backendResponse.json();

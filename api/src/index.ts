@@ -12,7 +12,7 @@ import { ConsensusRequest, CloudflareBindings } from "./types";
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
 app.use("*", logger());
-app.use("*", cors());
+app.use("/v1/*", cors());
 
 // Startup env validation — fail fast on bad deployment
 app.use("*", async (c, next) => {
@@ -33,17 +33,41 @@ app.use("*", async (c, next) => {
  * 3. No auth + budget="free"      → Free tier only (rate-limited, free models)
  */
 
+async function hashApiKey(apiKey: string): Promise<string> {
+  const bytes = new TextEncoder().encode(apiKey);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 // API Key Authentication Middleware (runs before x402)
 app.use("/v1/*", async (c, next) => {
   const authHeader = c.req.header("Authorization");
   const apiKey = authHeader?.replace("Bearer ", "");
 
   if (apiKey) {
-    const keyData = await c.env.CONSENSUS_CACHE.get(`apikey:${apiKey}`, { type: "json" }) as {
+    const keyHash = await hashApiKey(apiKey);
+    let keyData = await c.env.CONSENSUS_CACHE.get(`apikey:${keyHash}`, { type: "json" }) as {
       userId: string;
       tier: "paid" | "playground";
       stripeSubscriptionId?: string;
     } | null;
+
+    // Backward-compatible lookup for previously stored plaintext keys (migration path).
+    if (!keyData) {
+      const legacyKeyData = await c.env.CONSENSUS_CACHE.get(`apikey:${apiKey}`, { type: "json" }) as {
+        userId: string;
+        tier: "paid" | "playground";
+        stripeSubscriptionId?: string;
+      } | null;
+
+      if (legacyKeyData) {
+        await c.env.CONSENSUS_CACHE.put(`apikey:${keyHash}`, JSON.stringify(legacyKeyData), { expirationTtl: 31536000 });
+        await c.env.CONSENSUS_CACHE.delete(`apikey:${apiKey}`);
+        keyData = legacyKeyData;
+      }
+    }
 
     if (keyData) {
       c.set("authTier" as never, keyData.tier as never);
@@ -75,7 +99,7 @@ app.use("/v1/*", async (c, next) => {
   const limits: Record<string, number> = {
     free: 20,
     playground: 50,
-    paid: 10000,
+    paid: 1000,
   };
 
   const limit = limits[authTier] || 20;
@@ -216,9 +240,11 @@ app.post("/v1/chat/completions", async (c) => {
 
   const request: ConsensusRequest = {
     prompt: sanitizedPrompt,
-    budget,
-    reliability: (body.reliability as string) || "standard"
+    budget: ["free", "low", "medium", "high"].includes(budget) ? (budget as ConsensusRequest["budget"]) : "low",
+    reliability: (body.reliability === "high" ? "high" : "standard")
   };
+
+  const wantsStream = body.stream === true;
 
   try {
     const result = await engine.runConsensus(request, complexity.tier);
@@ -232,6 +258,64 @@ app.post("/v1/chat/completions", async (c) => {
       await c.env.CONSENSUS_CACHE.put(usageKey, newUsage, { expirationTtl: 86400 * 7 });
     }
 
+    // --- SSE Streaming path ---
+    if (wantsStream) {
+      const id = `cons-${Date.now()}`;
+      const created = Math.floor(Date.now() / 1000);
+      const encoder = new TextEncoder();
+
+      // Tokenise answer into ~4-word chunks to simulate incremental delivery
+      const tokens = result.answer.match(/\S+\s*/g) ?? [result.answer];
+      const CHUNK_SIZE = 4;
+      const wordChunks: string[] = [];
+      for (let i = 0; i < tokens.length; i += CHUNK_SIZE) {
+        wordChunks.push(tokens.slice(i, i + CHUNK_SIZE).join(""));
+      }
+
+      const consensusMeta = {
+        confidence: result.confidence,
+        tier: result.complexity,
+        votes: result.votes,
+        budget,
+        synthesized: result.synthesized ?? false,
+        cached: result.cached,
+      };
+
+      const readable = new ReadableStream({
+        start(controller) {
+          const emit = (payload: Record<string, unknown>) =>
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+
+          // Role announcement chunk (matches OpenAI streaming format)
+          emit({ id, object: "chat.completion.chunk", created, model: "council-router-v1",
+            choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }] });
+
+          // Content chunks
+          for (const chunk of wordChunks) {
+            emit({ id, object: "chat.completion.chunk", created, model: "council-router-v1",
+              choices: [{ index: 0, delta: { content: chunk }, finish_reason: null }] });
+          }
+
+          // Final stop chunk — consensus metadata appended here (50c)
+          emit({ id, object: "chat.completion.chunk", created, model: "council-router-v1",
+            choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+            consensus: consensusMeta });
+
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
+      });
+
+      return new Response(readable, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
+
+    // --- Non-streaming JSON path (unchanged) ---
     return c.json({
       id: `cons-${Date.now()}`,
       object: "chat.completion",
@@ -255,8 +339,40 @@ app.post("/v1/chat/completions", async (c) => {
       }
     });
   } catch (error: unknown) {
+    if (error instanceof Error && error.message.startsWith("[BUDGET_GUARDRAIL]")) {
+      // x402 + stream edge case: budget guardrail fired before any stream started (50d)
+      if (wantsStream) {
+        const encoder = new TextEncoder();
+        const errPayload = { id: `cons-err-${Date.now()}`, object: "chat.completion.chunk",
+          created: Math.floor(Date.now() / 1000), model: "council-router-v1",
+          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+          error: "Budget policy exceeded. Simplify the prompt or increase budget tier." };
+        return new Response(
+          encoder.encode(`data: ${JSON.stringify(errPayload)}\n\ndata: [DONE]\n\n`),
+          { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } }
+        );
+      }
+      return c.json({
+        error: "Budget policy exceeded. Simplify the prompt or increase budget tier."
+      }, 400);
+    }
+
     // Log internally, return generic message to avoid leaking internals
     console.error("[CouncilRouter] Consensus error:", error instanceof Error ? error.message : String(error));
+
+    if (wantsStream) {
+      // Emit streaming error so clients don't hang waiting for [DONE] (50d)
+      const encoder = new TextEncoder();
+      const errPayload = { id: `cons-err-${Date.now()}`, object: "chat.completion.chunk",
+        created: Math.floor(Date.now() / 1000), model: "council-router-v1",
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        error: "Consensus processing failed. Please try again." };
+      return new Response(
+        encoder.encode(`data: ${JSON.stringify(errPayload)}\n\ndata: [DONE]\n\n`),
+        { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } }
+      );
+    }
+
     return c.json({ error: "Consensus processing failed. Please try again." }, 500);
   }
 });
@@ -327,9 +443,10 @@ app.post("/admin/create-key", async (c) => {
   }
 
   const apiKey = `sk_${crypto.randomUUID().replace(/-/g, "")}`;
+  const keyHash = await hashApiKey(apiKey);
 
   await c.env.CONSENSUS_CACHE.put(
-    `apikey:${apiKey}`,
+    `apikey:${keyHash}`,
     JSON.stringify({ userId: body.userId, tier: body.tier, stripeSubscriptionId: body.stripeSubscriptionId }),
     { expirationTtl: 31536000 } // 1 year
   );

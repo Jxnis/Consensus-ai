@@ -196,9 +196,29 @@ main();`}
                             <span className="text-blue-500 text-xs font-bold">02</span>
                         </div>
                         <h3 className="font-heading text-lg mb-2">Developer Key</h3>
-                        <p className="text-sm text-muted-foreground mb-4">10k req/hour. $0.002 per request.</p>
+                        <p className="text-sm text-muted-foreground mb-4">1,000 req/hour. $0.002 per request.</p>
                         <code className="text-xs bg-muted px-2 py-1 rounded">Authorization: Bearer sk_...</code>
                     </div>
+                </div>
+            </section>
+
+            {/* API Reference */}
+            <section id="api-reference" className="space-y-8 scroll-mt-24">
+                <div>
+                   <h2 className="font-heading text-2xl text-foreground mb-4">API Reference</h2>
+                   <p className="text-muted-foreground">
+                     Full endpoint reference is being finalized. Core endpoint today: <code className="text-xs bg-muted px-2 py-1 rounded">POST /v1/chat/completions</code>.
+                   </p>
+                </div>
+            </section>
+
+            {/* SDKs */}
+            <section id="sdks" className="space-y-8 scroll-mt-24">
+                <div>
+                   <h2 className="font-heading text-2xl text-foreground mb-4">SDKs</h2>
+                   <p className="text-muted-foreground">
+                     OpenAI-compatible SDK examples are available now. Dedicated SDK guides are coming soon.
+                   </p>
                 </div>
             </section>
 

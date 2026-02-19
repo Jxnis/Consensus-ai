@@ -26,7 +26,7 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   metadataBase: new URL('https://councilrouter.ai'),
   title: 'CouncilRouter | Multi-Model Consensus Routing for AI',
-  description: "Get GPT-4 level reliability at a fraction of the cost. The world\'s first verified LLM router. Multiple models, one consensus.",
+  description: "Get higher reliability at a fraction of frontier-model cost. Multiple models, one consensus.",
   openGraph: {
     title: 'CouncilRouter',
     description: "Multiple Models. One Consensus. The Trust Layer for AI.",
