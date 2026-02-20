@@ -1,0 +1,403 @@
+{
+  "experiment": "factual_custom",
+  "budget": "free",
+  "timestamp": "2026-02-20T15:27:13.341Z",
+  "results": [
+    {
+      "id": "fact_001",
+      "question": "What is the capital of France?",
+      "ground_truth": "Paris",
+      "model_answer": "The capital of France is **Paris**. \n\nIt's known for iconic landmarks like the Eiffel Tower, the Louvre Museum, and the Arc de Triomphe, as well as its fashion, cuisine, and culture.",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 8703,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "The capital of France is **Paris**. \n\nIt's known for iconic landmarks like the Eiffel Tower, the Louvre Museum, and the Arc de Triomphe, as well as its fashion, cuisine, and culture.\n\n\n\n",
+          "agrees": true
+        },
+        {
+          "model": "Upstage: Solar Pro 3 (free)",
+          "answer": "The capital of France is **Paris**. It is the country’s largest city and a global cultural, economic, and political hub, famous for landmarks such as the Eiffel Tower, the Louvre Museum, and Notre‑Dame Cathedral.",
+          "agrees": false
+        },
+        {
+          "model": "NVIDIA: Nemotron Nano 9B V2 (free)",
+          "answer": "The capital of France is **Paris**.\n",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_002",
+      "question": "What year did World War II end?",
+      "ground_truth": "1945",
+      "model_answer": "World War II ended in 1945. The war officially concluded with the signing of the Instrument of Surrender by the Allied Powers and the Imperial Japanese Government on September 2, 1945, in Reims, France. This event marked the formal end of the conflict.",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 2828,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "LiquidAI: LFM2.5-1.2B-Instruct (free)",
+          "answer": "World War II ended in 1945. The war officially concluded with the signing of the Instrument of Surrender by the Allied Powers and the Imperial Japanese Government on September 2, 1945, in Reims, France. This event marked the formal end of the conflict.",
+          "agrees": true
+        },
+        {
+          "model": "NVIDIA: Nemotron 3 Nano 30B A3B (free)",
+          "answer": "World War II ended in **1945**.  \n\n- In Europe, the war concluded with Germany’s unconditional surrender on **May 8, 1945** (known as V‑E Day).  \n- In the Pacific, the conflict ended after Japan’s surrender, announced on **August 15, 1945** and formally signed on **September 2, 1945** (V‑J Day).  \n\nSo, while the fighting stopped at different times in different theaters, the overall war is considered to have ended in 1945.",
+          "agrees": false
+        },
+        {
+          "model": "Google: Gemma 3n 4B (free)",
+          "answer": "World War II ended in **1945**. \n\nSpecifically, it ended in two main parts:\n\n*   **September 2, 1945:** Japan formally surrendered to the Allies, marking the official end of the war.\n*   **August 14, 1945:** Japan announced its surrender, but the formal surrender ceremony took place on September 2nd.\n\n\n\n",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_003",
+      "question": "What is the chemical symbol for gold?",
+      "ground_truth": "Au",
+      "model_answer": "The chemical symbol for gold is **Au**.",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "MEDIUM",
+      "latency_ms": 5552,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "NVIDIA: Nemotron 3 Nano 30B A3B (free)",
+          "answer": "The chemical symbol for gold is **Au**.",
+          "agrees": true
+        },
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "Gold is represented by the symbol **Au**, which comes from the Latin word *aurum*. This symbol is used universally in chemistry and science to denote the element gold.",
+          "agrees": false
+        },
+        {
+          "model": "Qwen: Qwen3 VL 30B A3B Thinking",
+          "answer": "The chemical symbol for **gold** is **Au**.  \n\nThis symbol comes from the Latin word for gold, **\"aurum\"**.  \n\n### Why \"Au\"?\n- Gold has been known since ancient times, and its symbol is derived from its Latin name (*aurum*), not its English name.  \n- This is common for many elements (e.g., silver = **Ag** from *argentum*, lead = **Pb** from *plumbum*).  \n\n### Key Facts:\n- **Atomic Number**: 79  \n- **Appearance**: Lustrous yellow metal, highly malleable and resistant to corrosion.  \n- **Uses**: Jewelry, electronics, currency, and medical applications.  \n\nThis symbol is standardized by the **International Union of Pure and Applied Chemistry (IUPAC)** and appears on the periodic table. 🌟",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_004",
+      "question": "Who wrote 'Romeo and Juliet'?",
+      "ground_truth": "William Shakespeare",
+      "model_answer": "\"Romeo and Juliet\" was written by William Shakespeare, the renowned English playwright and poet of the late 16th and early 17th centuries. This tragic love story is one of his most famous works and has been widely performed and adapted over the centuries.",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 3189,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "\"Romeo and Juliet\" was written by William Shakespeare, the renowned English playwright and poet of the late 16th and early 17th centuries. This tragic love story is one of his most famous works and has been widely performed and adapted over the centuries.",
+          "agrees": true
+        },
+        {
+          "model": "Google: Gemma 3 27B (free)",
+          "answer": "William Shakespeare wrote \"Romeo and Juliet\"! It's one of his most famous and beloved plays. \n\nHe likely wrote it between 1594 and 1596, during his early tragic period. While the story itself is based on earlier Italian tales, Shakespeare's version is the one we know and cherish today.\n\n\n\n",
+          "agrees": false
+        },
+        {
+          "model": "Arcee AI: Trinity Mini (free)",
+          "answer": "\nTheplay **\"Romeo and Juliet\"** was written by **William Shakespeare**.\n\nHere are some key details:\n\n1.  **Author:** William Shakespeare (1564-1616), the renowned English playwright, poet, and actor.\n2.  **Time Period:** Believed to have been written between **1591 and 1595**, and first published in 1597.\n3.  **Genre:** Tragedy.\n4.  **Source:** While Shakespeare adapted the story from earlier sources (like Arthur Brooke's poem \"The Tragical History of Romeus and Juliet\" and William Painter's \"Palace of Pleasure\"), he is universally credited as the author of the play as we know it.\n\nSo, the definitive answer is **William Shakespeare**.",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_005",
+      "question": "What is the speed of light in vacuum (in km/s)?",
+      "ground_truth": "299,792",
+      "model_answer": "The speed of light in a vacuum is approximately **299,792,458 meters per second**.\n\nTo convert this to kilometers per second, we divide by 1000:\n\n299,792,458 meters/second / 1000 meters/kilometer = **299,792.458 km/s**\n\nSo, the speed of light in a vacuum is roughly **300,000 km/s**.",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 8026,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Google: Gemma 3 4B (free)",
+          "answer": "The speed of light in a vacuum is approximately **299,792,458 meters per second**.\n\nTo convert this to kilometers per second, we divide by 1000:\n\n299,792,458 meters/second / 1000 meters/kilometer = **299,792.458 km/s**\n\nSo, the speed of light in a vacuum is roughly **300,000 km/s**.\n\n",
+          "agrees": true
+        },
+        {
+          "model": "Upstage: Solar Pro 3 (free)",
+          "answer": "The speed of light in vacuum, denoted **c**, is defined exactly as  \n\n\\[\nc = 299\\,792\\,458\\ \\text{m/s}\n\\]\n\nSince 1 km = 1 000 m, this converts to  \n\n\\[\nc = 299\\,792.458\\ \\text{km/s}\n\\]\n\nIn everyday terms it’s often rounded to about **300 000 km/s**. This constant appears in many fundamental equations of physics, such as Einstein’s \\(E = mc^2\\) and the wave equation for electromagnetic radiation.",
+          "agrees": false
+        },
+        {
+          "model": "Qwen: Qwen3 VL 30B A3B Thinking",
+          "answer": "The **exact speed of light in a vacuum** is **299,792.458 kilometers per second (km/s)**.  \n\n### Key Details:\n1. **Definition**: This value is **defined** as exactly **299,792,458 meters per second (m/s)** by the International System of Units (SI).  \n2. **Conversion**:  \n   - Since 1 kilometer = 1,000 meters,  \n   - Speed in km/s = \\( \\frac{299,792,458  \\text{m/s}}{1,000} = 299,792.458  \\text{km/s} \\).  \n3. **Why exact?**: The speed of light is a **fundamental constant** in physics. Since 1983, the meter has been defined based on this speed (1 meter = distance light travels in \\( \\frac{1}{299,792,458} \\) seconds).  \n\n### Common Approximation:\n- For quick calculations, it is often rounded to **300,000 km/s** (a 0.07% error).  \n- **Example**: In astronomy or engineering, the exact value is critical, while the approximation suffices for rough estimates.  \n\nThis value is universal and applies to all electromagnetic radiation (e.g., visible light, radio waves) in a vacuum. 🌌",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_006",
+      "question": "What is the largest planet in our solar system?",
+      "ground_truth": "Jupiter",
+      "model_answer": "The **largest planet in our solar system is Jupiter**.\n\nHere's why:\n\n1.  **Size:** Jupiter has a **diameter of about 142,984 kilometers (88,846 miles)** at its equator. This is roughly **11 times wider than Earth**.\n2.  **Mass:** Jupiter is incredibly massive. Its mass is **about 318 times the mass of Earth**. In fact, **all the other planets in the solar system combined are less massive than Jupiter**.\n3.  **Volume:** Jupiter's volume is so vast that **more than 1,300 Earths could fit inside it**.\n\n**Key Facts about Jupiter:**\n\n*   **Type:** It's a **gas giant**, meaning it's primarily composed of hydrogen and helium, with no solid surface like Earth.\n*   **Appearance:** Famous for its prominent **Great Red Spot**, a massive, centuries-old storm larger than Earth.\n*   **Moons:** It has a vast system of **79 known moons** (as of 2023), including the four large Galilean moons (Io, Europa, Ganymede, and Callisto) discovered by Galileo Galilei.\n\n**Why not Saturn?**\nWhile Saturn is the second-largest planet and has the most famous ring system, its diameter is only about **116,500 km (72,400 miles)** – significantly smaller than Jupiter's. Saturn's mass is also less than half of Jupiter's (about 95 times Earth's mass).\n\nSo, without a doubt, **Jupiter reigns as the undisputed champion of size in our solar system**.",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 20261,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Qwen: Qwen3 VL 30B A3B Thinking",
+          "answer": "The **largest planet in our solar system is Jupiter**.\n\nHere's why:\n\n1.  **Size:** Jupiter has a **diameter of about 142,984 kilometers (88,846 miles)** at its equator. This is roughly **11 times wider than Earth**.\n2.  **Mass:** Jupiter is incredibly massive. Its mass is **about 318 times the mass of Earth**. In fact, **all the other planets in the solar system combined are less massive than Jupiter**.\n3.  **Volume:** Jupiter's volume is so vast that **more than 1,300 Earths could fit inside it**.\n\n**Key Facts about Jupiter:**\n\n*   **Type:** It's a **gas giant**, meaning it's primarily composed of hydrogen and helium, with no solid surface like Earth.\n*   **Appearance:** Famous for its prominent **Great Red Spot**, a massive, centuries-old storm larger than Earth.\n*   **Moons:** It has a vast system of **79 known moons** (as of 2023), including the four large Galilean moons (Io, Europa, Ganymede, and Callisto) discovered by Galileo Galilei.\n\n**Why not Saturn?**\nWhile Saturn is the second-largest planet and has the most famous ring system, its diameter is only about **116,500 km (72,400 miles)** – significantly smaller than Jupiter's. Saturn's mass is also less than half of Jupiter's (about 95 times Earth's mass).\n\nSo, without a doubt, **Jupiter reigns as the undisputed champion of size in our solar system**.",
+          "agrees": true
+        },
+        {
+          "model": "Qwen: Qwen3 VL 235B A22B Thinking",
+          "answer": "The **largest planet in our solar system is Jupiter**. Here's why:\n\n1. **Size**:  \n   - Jupiter's **diameter is about 139,820 km (86,881 miles)**, making it **11 times wider than Earth**.  \n   - If Earth were the size of a grape, Jupiter would be as large as a basketball.\n\n2. **Mass**:  \n   - It has **318 times the mass of Earth** and is **more than twice as massive as all other planets combined**.  \n   - Its immense gravity dominates the solar system, influencing the orbits of asteroids and comets.\n\n3. **Composition**:  \n   - A **gas giant** composed mostly of hydrogen (90%) and helium (10%), with no solid surface.  \n   - Its rapid rotation (9.9 hours) causes it to bulge at the equator, giving it an oblate shape.\n\n4. **Key Features**:  \n   - Home to the **Great Red Spot**—a massive storm larger than Earth that has raged for at least 400 years.  \n   - Has **95 confirmed moons** (as of 2023), including the four large Galilean moons (Io, Europa, Ganymede, and Callisto).\n\n**Comparison**:  \n- **Saturn** (the second-largest planet) has only **~30% of Jupiter's mass** and is less dense (it could float in water if a large enough ocean existed!).  \n- All other planets (including Uranus and Neptune) are significantly smaller.\n\nJupiter's sheer scale makes it the undisputed giant of our solar system—a true gravitational anchor that shapes the dynamics of the entire planetary system. 🌌",
+          "agrees": false
+        },
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "The largest planet in our solar system is **Jupiter**. It is a gas giant with a diameter of about 139,820 kilometers (86,881 miles), making it more than 11 times wider than Earth. Jupiter is also the most massive planet in the solar system, with a mass more than twice that of all the other planets combined. Its iconic Great Red Spot, a massive storm, is one of its most well-known features.",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_007",
+      "question": "What is the boiling point of water at sea level in Celsius?",
+      "ground_truth": "100",
+      "model_answer": "The boiling point of water at sea level (standard atmospheric pressure) is **100°C**. This is the temperature at which water vapor pressure equals the atmospheric pressure, causing water to vaporize into steam and boil. \n\n**Answer:** \\boxed{100}",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 6102,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "LiquidAI: LFM2.5-1.2B-Thinking (free)",
+          "answer": "The boiling point of water at sea level (standard atmospheric pressure) is **100°C**. This is the temperature at which water vapor pressure equals the atmospheric pressure, causing water to vaporize into steam and boil. \n\n**Answer:** \\boxed{100}",
+          "agrees": true
+        },
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "At sea level, atmospheric pressure is about 1 atmosphere (101.325 kPa). Under these conditions, water molecules have enough energy to overcome atmospheric pressure and transition from liquid to gas at a specific temperature. This temperature is 100 degrees Celsius.",
+          "agrees": false
+        },
+        {
+          "model": "Google: Gemma 3 12B (free)",
+          "answer": "The boiling point of water at sea level is **100 degrees Celsius**.\n\n\n\nIt's a pretty well-known fact!",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_008",
+      "question": "Who painted the Mona Lisa?",
+      "ground_truth": "Leonardo da Vinci",
+      "model_answer": "Leonardo da Vinci.",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 4763,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "StepFun: Step 3.5 Flash (free)",
+          "answer": "Leonardo da Vinci.",
+          "agrees": true
+        },
+        {
+          "model": "LiquidAI: LFM2.5-1.2B-Instruct (free)",
+          "answer": "The Mona Lisa was painted by the Italian artist Leonardo da Vinci.",
+          "agrees": false
+        },
+        {
+          "model": "Google: Gemma 3 12B (free)",
+          "answer": "The Mona Lisa was painted by **Leonardo da Vinci**.\n\n\n\nHe started the painting around 1503 and likely continued working on it until shortly before his death in 1519. It's one of his most famous and recognizable works.",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_009",
+      "question": "What is the square root of 144?",
+      "ground_truth": "12",
+      "model_answer": "The square root of 144 is 12.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 10798,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "The square root of 144 is 12.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_010",
+      "question": "In what year did the United States declare independence?",
+      "ground_truth": "1776",
+      "model_answer": "The United States declared independence in 1776.",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 16516,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "The United States declared independence in 1776.",
+          "agrees": true
+        },
+        {
+          "model": "StepFun: Step 3.5 Flash (free)",
+          "answer": "The United States declared independence in **1776**. The Declaration of Independence was formally adopted by the Continental Congress on **July 4, 1776**.",
+          "agrees": false
+        },
+        {
+          "model": "Qwen: Qwen3 235B A22B Thinking 2507",
+          "answer": "The United States declared independence in **1776**.  \n\nSpecifically, the **Declaration of Independence** was adopted by the Second Continental Congress on **July 4, 1776**. This date is celebrated annually as **Independence Day** in the U.S.  \n\n### Key Details:\n- **July 2, 1776**: Congress voted *in favor* of independence (the actual decision).  \n- **July 4, 1776**: The final text of the Declaration was formally adopted and signed (marking the official declaration).  \n- **August 2, 1776**: Most delegates signed the physical parchment document (though some signed later).  \n\nWhile the *decision* for independence was made on July 2, the **July 4 date** became iconic because it was when the approved Declaration was publicly announced and disseminated. Thus, **1776** is universally recognized as the year of U.S. independence.",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_011",
+      "question": "What is the atomic number of carbon?",
+      "ground_truth": "6",
+      "model_answer": "Carbon is a chemical element with the symbol C and atomic number 6. This means that a carbon atom has 6 protons in its nucleus.",
+      "confidence": 0.5,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 7273,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "Carbon is a chemical element with the symbol C and atomic number 6. This means that a carbon atom has 6 protons in its nucleus.",
+          "agrees": true
+        },
+        {
+          "model": "Qwen: Qwen3 VL 30B A3B Thinking",
+          "answer": "The **atomic number of carbon is 6**.  \n\nThis means every carbon atom has **6 protons** in its nucleus, which defines it as carbon. The atomic number is fundamental to an element's identity and determines its position in the periodic table (carbon is element 6).  \n\n**Key point**:  \n- Atomic number = Number of protons (in a neutral atom, this also equals the number of electrons).  \n- Carbon's atomic mass (average mass of its isotopes) is approximately 12.01, but the **atomic number is always 6**.  \n\nThis is a core concept in chemistry and biology, as carbon is the backbone of organic molecules. 😊",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_012",
+      "question": "What is the longest river in the world?",
+      "ground_truth": "Nile",
+      "model_answer": "The longest river in the world is the **Nile River**, which stretches approximately **6,650 kilometers (4,130 miles)** in length. It flows through northeastern Africa, primarily through Egypt and Sudan, and has historically been a vital source of water, transportation, and agriculture for the region. However, some studies suggest that the **Amazon River** in South America might be slightly longer, depending on how its length is measured, but the Nile is traditionally recognized as the longest.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 20713,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "The longest river in the world is the **Nile River**, which stretches approximately **6,650 kilometers (4,130 miles)** in length. It flows through northeastern Africa, primarily through Egypt and Sudan, and has historically been a vital source of water, transportation, and agriculture for the region. However, some studies suggest that the **Amazon River** in South America might be slightly longer, depending on how its length is measured, but the Nile is traditionally recognized as the longest.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_013",
+      "question": "How many continents are there?",
+      "ground_truth": "7",
+      "model_answer": "The number of continents is **not universally agreed upon**, and the answer depends on **geographical, cultural, and educational conventions**. Here's a breakdown of the most common models:\n\n1.  **Seven Continents (Most Common in English-Speaking Countries & Many Educational Systems):**\n    *   **Africa**\n    *   **Antarctica**\n    *   **Asia**\n    *   **Australia (Oceania)** - *Note: \"Australia\" often refers to the continent itself, while \"Oceania\" is the broader region including the continent and surrounding islands.*\n    *   **Europe**\n    *   **North America**\n    *   **South America**\n    *   **Why 7?** This model emphasizes the cultural and historical separation between Europe and Asia (divided by the Ural Mountains, Ural River, Caspian Sea, Caucasus Mountains, and Black Sea) and treats the Americas as two distinct continents.\n\n2.  **Six Continents (Common in Some European, Asian, and Latin American Contexts):**\n    *   **Africa**\n    *   **Antarctica**\n    *   **Asia**\n    *   **Australia (Oceania)**\n    *   **Europe & Asia (Eurasia)** - *Treated as a single continent.*\n    *   **The Americas (North & South America)** - *Treated as a single continent.*\n    *   **Why 6?** This model emphasizes the continuous landmass of Eurasia and the continuous landmass of the Americas (separated by the Isthmus of Panama).\n\n3.  **Five Continents (Less Common, but used in some contexts):**\n    *   **Africa**\n    *   **Asia**\n    *   **Australia (Oceania)**\n    *   **Europe**\n    *   **The Americas (North & South America)** - *Treated as a single continent.*\n    *   **Why 5?** This model combines Europe and Asia into Eurasia *and* combines the Americas into one continent.\n\n**Why the Confusion?**\n\n*   **No Scientific Definition:** There is no single, objective geological or biological definition of a \"continent.\" The concept is largely **geographical and cultural**.\n*   **Continental Boundaries:** The lines separating continents are often arbitrary or based on historical/cultural divisions (e.g., the Suez Canal for Africa/Asia, the Bering Strait for Asia/North America, the Isthmus of Panama for North/South America).\n*   **Cultural Perspectives:** Different regions emphasize different historical and cultural divisions. For example:\n    *   Russia and China often use the 6-continent model (Eurasia + Americas).\n    *   Some European countries (like France) traditionally use the 6-continent model.\n    *   The 7-continent model is dominant in the US, UK, Canada, Australia, and many other English-speaking nations.\n*   **Oceania vs. Australia:** \"Australia\" is the continent, while \"Oceania\" is the region encompassing the continent and the Pacific islands. Some models list \"Australia\" as the continent, others list \"Oceania\" as the continent (though geographically, Oceania is a region, not a single continent).\n\n**Most Common Answer:**\n\n*   **Seven continents** is the **most widely taught and recognized model in English-speaking countries and many international educational contexts.** If you're asked this question in a standard school setting (especially in the US, UK, Canada, Australia), **seven is the expected answer.**\n\n**In Summary:**\n\n*   **Seven** is the most common answer globally (especially in English education).\n*   **Six** is also very common, particularly in Europe and Asia.\n*   **Five** is less common but exists.\n*   **Antarctica** is always counted as a continent in all models.\n*   **Australia** is always counted as a continent in the 7-continent model (as \"Australia\"), while \"Oceania\" is the region.\n\n**So, while the most frequent answer you'll encounter is seven, it's crucial to understand that the number depends on the specific geographical model being used.** There is no single \"correct\" number for all contexts.",
+      "confidence": 0.5,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 19217,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Qwen: Qwen3 VL 30B A3B Thinking",
+          "answer": "The number of continents is **not universally agreed upon**, and the answer depends on **geographical, cultural, and educational conventions**. Here's a breakdown of the most common models:\n\n1.  **Seven Continents (Most Common in English-Speaking Countries & Many Educational Systems):**\n    *   **Africa**\n    *   **Antarctica**\n    *   **Asia**\n    *   **Australia (Oceania)** - *Note: \"Australia\" often refers to the continent itself, while \"Oceania\" is the broader region including the continent and surrounding islands.*\n    *   **Europe**\n    *   **North America**\n    *   **South America**\n    *   **Why 7?** This model emphasizes the cultural and historical separation between Europe and Asia (divided by the Ural Mountains, Ural River, Caspian Sea, Caucasus Mountains, and Black Sea) and treats the Americas as two distinct continents.\n\n2.  **Six Continents (Common in Some European, Asian, and Latin American Contexts):**\n    *   **Africa**\n    *   **Antarctica**\n    *   **Asia**\n    *   **Australia (Oceania)**\n    *   **Europe & Asia (Eurasia)** - *Treated as a single continent.*\n    *   **The Americas (North & South America)** - *Treated as a single continent.*\n    *   **Why 6?** This model emphasizes the continuous landmass of Eurasia and the continuous landmass of the Americas (separated by the Isthmus of Panama).\n\n3.  **Five Continents (Less Common, but used in some contexts):**\n    *   **Africa**\n    *   **Asia**\n    *   **Australia (Oceania)**\n    *   **Europe**\n    *   **The Americas (North & South America)** - *Treated as a single continent.*\n    *   **Why 5?** This model combines Europe and Asia into Eurasia *and* combines the Americas into one continent.\n\n**Why the Confusion?**\n\n*   **No Scientific Definition:** There is no single, objective geological or biological definition of a \"continent.\" The concept is largely **geographical and cultural**.\n*   **Continental Boundaries:** The lines separating continents are often arbitrary or based on historical/cultural divisions (e.g., the Suez Canal for Africa/Asia, the Bering Strait for Asia/North America, the Isthmus of Panama for North/South America).\n*   **Cultural Perspectives:** Different regions emphasize different historical and cultural divisions. For example:\n    *   Russia and China often use the 6-continent model (Eurasia + Americas).\n    *   Some European countries (like France) traditionally use the 6-continent model.\n    *   The 7-continent model is dominant in the US, UK, Canada, Australia, and many other English-speaking nations.\n*   **Oceania vs. Australia:** \"Australia\" is the continent, while \"Oceania\" is the region encompassing the continent and the Pacific islands. Some models list \"Australia\" as the continent, others list \"Oceania\" as the continent (though geographically, Oceania is a region, not a single continent).\n\n**Most Common Answer:**\n\n*   **Seven continents** is the **most widely taught and recognized model in English-speaking countries and many international educational contexts.** If you're asked this question in a standard school setting (especially in the US, UK, Canada, Australia), **seven is the expected answer.**\n\n**In Summary:**\n\n*   **Seven** is the most common answer globally (especially in English education).\n*   **Six** is also very common, particularly in Europe and Asia.\n*   **Five** is less common but exists.\n*   **Antarctica** is always counted as a continent in all models.\n*   **Australia** is always counted as a continent in the 7-continent model (as \"Australia\"), while \"Oceania\" is the region.\n\n**So, while the most frequent answer you'll encounter is seven, it's crucial to understand that the number depends on the specific geographical model being used.** There is no single \"correct\" number for all contexts.",
+          "agrees": true
+        },
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "There are generally considered to be **seven continents** in the world:\n\n1. **Africa**\n2. **Antarctica**\n3. **Asia**\n4. **Europe**\n5. **North America**\n6. **Australia (Oceania)**\n7. **South America**\n\nHowever, the classification of continents can vary depending on cultural, geographical, or educational perspectives. For example, some models combine Europe and Asia into a single continent called **Eurasia**, reducing the count to six. Similarly, North and South America are sometimes grouped as the **Americas**, also resulting in six continents.",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_015",
+      "question": "What is the freezing point of water in Fahrenheit?",
+      "ground_truth": "32",
+      "model_answer": "The freezing point of water in Fahrenheit is 32°F. This is the temperature at which water transitions from a liquid to a solid state under standard atmospheric pressure.",
+      "confidence": 0.5,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 10295,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "The freezing point of water in Fahrenheit is 32°F. This is the temperature at which water transitions from a liquid to a solid state under standard atmospheric pressure.",
+          "agrees": true
+        },
+        {
+          "model": "StepFun: Step 3.5 Flash (free)",
+          "answer": "The freezing point of water is 32°F (0°C) at standard atmospheric pressure.",
+          "agrees": false
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "total_cases": 14,
+    "accuracy": 1,
+    "avg_confidence": 0.4642857142857143,
+    "ece": 0.5357142857142858,
+    "brier_score": 0.33928571428571436,
+    "confidence_bins": [
+      {
+        "range": "0.0-0.2",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.2-0.4",
+        "count": 9,
+        "accuracy": 1,
+        "avg_confidence": 0.3333333333333333
+      },
+      {
+        "range": "0.4-0.6",
+        "count": 3,
+        "accuracy": 1,
+        "avg_confidence": 0.5
+      },
+      {
+        "range": "0.6-0.8",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.8-1.0",
+        "count": 2,
+        "accuracy": 1,
+        "avg_confidence": 1
+      }
+    ]
+  }
+}

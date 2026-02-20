@@ -1,0 +1,86 @@
+{
+  "$schema": "./config.schema.json",
+  "version": "2026-02-20",
+  "models": {
+    "councilrouter_free": {
+      "id": "council-router-v1",
+      "budget": "free",
+      "name": "CouncilRouter (Free Tier)",
+      "description": "3-5 free models with consensus",
+      "cost_per_request": 0.0
+    },
+    "councilrouter_paid": {
+      "id": "council-router-v1",
+      "budget": "low",
+      "name": "CouncilRouter (Paid Tier)",
+      "description": "3-5 cheap paid models with consensus",
+      "cost_per_request": 0.002
+    },
+    "current_sota_2026": {
+      "id": "anthropic/claude-opus-4-6",
+      "name": "Claude Opus 4.6 (Current SOTA)",
+      "description": "Best commercially available model as of Feb 2026",
+      "cost_per_request": 0.015,
+      "note": "Update quarterly as new models release"
+    },
+    "popular_mid_tier": {
+      "id": "openai/gpt-4o-mini",
+      "name": "GPT-4o mini",
+      "description": "Popular mid-tier model for cost-conscious developers",
+      "cost_per_request": 0.00015
+    }
+  },
+  "datasets": {
+    "gsm8k": {
+      "name": "GSM8K (Grade School Math)",
+      "description": "Math word problems - auto-gradable",
+      "sample_size": 50,
+      "category": "reasoning",
+      "auto_gradable": true
+    },
+    "humaneval": {
+      "name": "HumanEval (Code Generation)",
+      "description": "Python function generation - auto-gradable via execution",
+      "sample_size": 50,
+      "category": "code",
+      "auto_gradable": true
+    },
+    "mmlu_subset": {
+      "name": "MMLU (Factual Knowledge)",
+      "description": "Multiple choice questions across domains",
+      "sample_size": 50,
+      "category": "factual",
+      "auto_gradable": true
+    },
+    "factual_custom": {
+      "name": "Custom Factual Questions",
+      "description": "Verifiable facts with ground truth",
+      "sample_size": 25,
+      "category": "factual",
+      "auto_gradable": true
+    }
+  },
+  "experiments": {
+    "confidence_calibration": {
+      "description": "Measure if confidence score predicts accuracy",
+      "models": ["councilrouter_free", "councilrouter_paid"],
+      "datasets": ["gsm8k", "humaneval", "factual_custom"],
+      "metrics": ["accuracy", "confidence", "ece", "brier_score"],
+      "priority": "P0"
+    },
+    "quality_per_dollar": {
+      "description": "Compare accuracy vs cost across models",
+      "models": ["councilrouter_free", "current_sota_2026", "popular_mid_tier"],
+      "datasets": ["gsm8k", "humaneval"],
+      "metrics": ["accuracy", "cost_efficiency"],
+      "priority": "P1"
+    },
+    "consensus_value": {
+      "description": "Does consensus beat single model at same cost?",
+      "models": ["councilrouter_paid", "popular_mid_tier"],
+      "datasets": ["gsm8k", "humaneval"],
+      "metrics": ["accuracy", "hallucination_rate"],
+      "priority": "P2"
+    }
+  }
+}

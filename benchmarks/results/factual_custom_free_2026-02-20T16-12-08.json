@@ -1,0 +1,45 @@
+{
+  "experiment": "factual_custom",
+  "budget": "free",
+  "timestamp": "2026-02-20T16:12:08.537Z",
+  "results": [],
+  "metrics": {
+    "total_cases": 0,
+    "accuracy": null,
+    "avg_confidence": null,
+    "ece": 0,
+    "brier_score": null,
+    "confidence_bins": [
+      {
+        "range": "0.0-0.2",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.2-0.4",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.4-0.6",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.6-0.8",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.8-1.0",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      }
+    ]
+  }
+}

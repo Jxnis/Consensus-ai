@@ -1,0 +1,402 @@
+{
+  "experiment": "factual_custom",
+  "budget": "free",
+  "timestamp": "2026-02-20T16:22:12.785Z",
+  "results": [
+    {
+      "id": "fact_001",
+      "question": "What is the capital of France?",
+      "ground_truth": "Paris",
+      "model_answer": "The capital of France is **Paris**. It is the largest city in France and is known for its rich history, culture, art, and landmarks such as the Eiffel Tower, the Louvre Museum, and Notre-Dame Cathedral.",
+      "confidence": 0.5,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 18540,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "The capital of France is **Paris**. It is the largest city in France and is known for its rich history, culture, art, and landmarks such as the Eiffel Tower, the Louvre Museum, and Notre-Dame Cathedral.",
+          "agrees": true
+        },
+        {
+          "model": "Free Models Router",
+          "answer": "The capital of France is **Paris**.",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_002",
+      "question": "What year did World War II end?",
+      "ground_truth": "1945",
+      "model_answer": "World War II ended in 1945. The war in Europe concluded with Germany's unconditional surrender on May 8, 1945, known as Victory in Europe Day (VE Day). The war in the Pacific ended after the United States dropped atomic bombs on Hiroshima and Nagasaki in August 1945, leading to Japan's surrender on September 2, 1945, known as Victory over Japan Day (VJ Day).",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 10245,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "World War II ended in 1945. The war in Europe concluded with Germany's unconditional surrender on May 8, 1945, known as Victory in Europe Day (VE Day). The war in the Pacific ended after the United States dropped atomic bombs on Hiroshima and Nagasaki in August 1945, leading to Japan's surrender on September 2, 1945, known as Victory over Japan Day (VJ Day).",
+          "agrees": true
+        },
+        {
+          "model": "Free Models Router",
+          "answer": "World War II ended in **1945**. The war in Europe concluded with Germany's unconditional surrender on **May 8, 1945** (known as Victory in Europe Day or VE Day). The war in the Pacific ended after the United States dropped atomic bombs on Hiroshima and Nagasaki, leading to Japan's surrender on **August 15, 1945** (formally signed on **September 2, 1945**), marking Victory over Japan Day (VJ Day).",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_003",
+      "question": "What is the chemical symbol for gold?",
+      "ground_truth": "Au",
+      "model_answer": "Gold is a chemical element with the symbol **Au**, derived from the Latin word *aurum*, meaning \"shining dawn\" or \"glow of sunrise.\" It is a precious metal known for its lustrous yellow appearance and is widely used in jewelry, currency, and various industrial applications.",
+      "confidence": 0.5,
+      "is_correct": true,
+      "complexity_tier": "MEDIUM",
+      "latency_ms": 8770,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "Gold is a chemical element with the symbol **Au**, derived from the Latin word *aurum*, meaning \"shining dawn\" or \"glow of sunrise.\" It is a precious metal known for its lustrous yellow appearance and is widely used in jewelry, currency, and various industrial applications.",
+          "agrees": true
+        },
+        {
+          "model": "Qwen: Qwen3 VL 235B A22B Thinking",
+          "answer": "The chemical symbol for **gold** is **Au**.\n\nThis symbol comes from the Latin word for gold, **\"aurum\"** (meaning \"shining dawn\" or \"glow of sunrise\"). \n\n*   **Element:** Gold\n*   **Symbol:** Au\n*   **Atomic Number:** 79\n\nThis naming convention (using Latin roots) is common for many elements (e.g., Fe for Iron from *Ferrum*, Ag for Silver from *Argentum*).",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_004",
+      "question": "Who wrote 'Romeo and Juliet'?",
+      "ground_truth": "William Shakespeare",
+      "model_answer": "William Shakespeare.",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 15794,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "StepFun: Step 3.5 Flash (free)",
+          "answer": "William Shakespeare.",
+          "agrees": true
+        },
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "\"Romeo and Juliet\" was written by William Shakespeare, the renowned English playwright and poet of the late 16th and early 17th centuries. This tragic love story is one of his most famous works, exploring themes of love, fate, and conflict.",
+          "agrees": false
+        },
+        {
+          "model": "Qwen: Qwen3 235B A22B Thinking 2507",
+          "answer": "The author of **'Romeo and Juliet'** is **William Shakespeare**.\n\nHere are some key details:\n\n1.  **Written:** Most scholars believe it was composed between **1595 and 1596**, during the early part of Shakespeare's career.\n2.  **Genre:** It is one of Shakespeare's most famous **tragedies**.\n3.  **Significance:** While based on earlier Italian tales (like Arthur Brooke's poem *The Tragical History of Romeus and Juliet*), Shakespeare's version became the definitive telling of the story of the \"star-cross'd lovers\" from feuding families in Verona.\n4.  **Legacy:** It is arguably the most famous love story in the English language and has been adapted countless times for stage, film, opera, ballet, and other media.\n\nSo, the definitive answer is **William Shakespeare**.",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_005",
+      "question": "What is the speed of light in vacuum (in km/s)?",
+      "ground_truth": "299,792",
+      "model_answer": "1000",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 12460,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Qwen: Qwen3 VL 30B A3B Thinking",
+          "answer": "The speed of light in vacuum is **exactly 299,792.458 km/s**.  \n\nThis value is a **defined constant** in the International System of Units (SI), as the meter is now defined based on the speed of light. Specifically:  \n- **299,792,458 meters per second (m/s)**  \n- Converted to kilometers per second (km/s): **299,792.458 km/s** (since 1 km = 1,000 m).  \n\n### Key Notes:\n1. **Exact Value**: Unlike measured quantities, this is fixed by definition (since 1983).  \n2. **Common Approximation**: For simplicity, it is often rounded to **300,000 km/s** in non-technical contexts, but the precise value is **299,792.458 km/s**.  \n3. **Vacuum Requirement**: This speed applies *only* in a perfect vacuum. Light slows down in air, water, or other media.  \n\nThis constant is fundamental to physics (e.g., Einstein’s theory of relativity) and underpins modern measurements of distance and time.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_006",
+      "question": "What is the largest planet in our solar system?",
+      "ground_truth": "Jupiter",
+      "model_answer": "Jupiter is the largest planet in our solar system. It is a gas giant with a diameter of approximately 143,000 kilometers (about 11 times Earth's diameter) and has more than twice the mass of all the other planets combined.",
+      "confidence": 0.5,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 17784,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "StepFun: Step 3.5 Flash (free)",
+          "answer": "Jupiter is the largest planet in our solar system. It is a gas giant with a diameter of approximately 143,000 kilometers (about 11 times Earth's diameter) and has more than twice the mass of all the other planets combined.",
+          "agrees": true
+        },
+        {
+          "model": "Qwen: Qwen3 235B A22B Thinking 2507",
+          "answer": "The **largest planet in our solar system is Jupiter**.\n\nHere's why:\n\n1.  **Size (Diameter):** Jupiter has an **equatorial diameter of about 142,984 kilometers (88,846 miles)**. This is more than **11 times the diameter of Earth**.\n2.  **Volume:** You could fit **over 1,300 Earths** inside Jupiter.\n3.  **Mass:** Jupiter is also the **most massive planet**, containing more than **twice the mass of all the other planets in the solar system combined**. Its mass is about 318 times that of Earth.\n4.  **Comparison to Other Giants:** While Saturn is also a gas giant and the second-largest planet, Jupiter is significantly larger and more massive. Saturn has a larger *volume* than Jupiter only because it's much less dense (it could theoretically float in water!), but Jupiter has a much larger *diameter* and vastly more *mass*.\n\n**Key Facts about Jupiter:**\n*   **Type:** Gas Giant (primarily hydrogen and helium).\n*   **Notable Feature:** Home to the **Great Red Spot**, a massive, centuries-old storm larger than Earth.\n*   **Moons:** Has at least 95 known moons, including the four large Galilean moons (Io, Europa, Ganymede, and Callisto). Ganymede is even larger than the planet Mercury.\n\nSo, whether you measure by physical size (diameter/volume) or by mass, **Jupiter is definitively the largest planet in our solar system.**",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_007",
+      "question": "What is the boiling point of water at sea level in Celsius?",
+      "ground_truth": "100",
+      "model_answer": "The boiling point of water at sea level (under standard atmospheric pressure of **1 atmosphere** or **101.3 kPa**) is **100 degrees Celsius (°C)**.  \n\n### Key Details:\n- **Why sea level?** Atmospheric pressure decreases with altitude. At higher elevations, water boils **below** 100°C (e.g., ~95°C at 1,500 meters). Sea level represents the standard reference pressure.\n- **Purity matters:** This assumes **pure water**. Dissolved substances (e.g., salt) raise the boiling point.\n- **Scientific basis:** The 100°C value is defined by the Celsius scale itself, where 0°C is water’s freezing point and 100°C is its boiling point at standard pressure.\n\nThis is a fundamental constant in science, cooking, and engineering. For most practical purposes at sea level, **100°C** is the standard answer. 🌊",
+      "confidence": 0.5,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 20523,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Qwen: Qwen3 VL 235B A22B Thinking",
+          "answer": "The boiling point of water at sea level (under standard atmospheric pressure of **1 atmosphere** or **101.3 kPa**) is **100 degrees Celsius (°C)**.  \n\n### Key Details:\n- **Why sea level?** Atmospheric pressure decreases with altitude. At higher elevations, water boils **below** 100°C (e.g., ~95°C at 1,500 meters). Sea level represents the standard reference pressure.\n- **Purity matters:** This assumes **pure water**. Dissolved substances (e.g., salt) raise the boiling point.\n- **Scientific basis:** The 100°C value is defined by the Celsius scale itself, where 0°C is water’s freezing point and 100°C is its boiling point at standard pressure.\n\nThis is a fundamental constant in science, cooking, and engineering. For most practical purposes at sea level, **100°C** is the standard answer. 🌊",
+          "agrees": true
+        },
+        {
+          "model": "Qwen: Qwen3 235B A22B Thinking 2507",
+          "answer": "The boiling point of water at **sea level** under **standard atmospheric pressure** (1 atmosphere or 101.325 kPa) is **100 degrees Celsius (°C)**.  \n\n### Key Details:\n- **Why 100°C?**  \n  This value is defined by the Celsius scale itself, where 0°C is the freezing point of water and 100°C is the boiling point at sea level.  \n- **Pressure Dependence:**  \n  At higher altitudes (lower pressure), water boils **below 100°C** (e.g., ~95°C in Denver, Colorado). At lower altitudes or higher pressure (e.g., in a pressure cooker), it boils **above 100°C**.  \n- **Purity Matters:**  \n  This applies to **pure water**. Dissolved substances (like salt) can raise the boiling point slightly.  \n\nThis is a fundamental reference point in science, cooking, and engineering! 🌡️",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_009",
+      "question": "What is the square root of 144?",
+      "ground_truth": "12",
+      "model_answer": "The square root of 144 is 12.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 799,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "The square root of 144 is 12.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_010",
+      "question": "In what year did the United States declare independence?",
+      "ground_truth": "1776",
+      "model_answer": "The United States declared independence in 1776. This event is commemorated annually on July 4th, known as Independence Day.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 5727,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "The United States declared independence in 1776. This event is commemorated annually on July 4th, known as Independence Day.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_011",
+      "question": "What is the atomic number of carbon?",
+      "ground_truth": "6",
+      "model_answer": "Carbon is an element found in group 14 of the periodic table. Its atomic number is 6, which means it has 6 protons in its nucleus.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 5724,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "Carbon is an element found in group 14 of the periodic table. Its atomic number is 6, which means it has 6 protons in its nucleus.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_012",
+      "question": "What is the longest river in the world?",
+      "ground_truth": "Nile",
+      "model_answer": "The longest river in the world is the **Nile River**, which stretches approximately **6,650 kilometers (4,130 miles)** in length. It flows through northeastern Africa, primarily through Egypt and Sudan, and has historically been a vital source of water, transportation, and agriculture for the region. However, some studies suggest that the **Amazon River** in South America might be slightly longer, depending on how its length is measured, but the Nile is traditionally recognized as the longest.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 657,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "The longest river in the world is the **Nile River**, which stretches approximately **6,650 kilometers (4,130 miles)** in length. It flows through northeastern Africa, primarily through Egypt and Sudan, and has historically been a vital source of water, transportation, and agriculture for the region. However, some studies suggest that the **Amazon River** in South America might be slightly longer, depending on how its length is measured, but the Nile is traditionally recognized as the longest.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_013",
+      "question": "How many continents are there?",
+      "ground_truth": "7",
+      "model_answer": "There are generally considered to be **seven continents** in the world:\n\n1. **Africa**\n2. **Antarctica**\n3. **Asia**\n4. **Europe**\n5. **North America**\n6. **Australia (Oceania)**\n7. **South America**\n\nHowever, the exact number can vary depending on how continents are defined. For example, some models combine Europe and Asia into a single continent called **Eurasia**, reducing the count to six. Similarly, North and South America are sometimes grouped as the **Americas**, also resulting in six continents. The seven-continent model is the most widely taught and recognized.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 8131,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "There are generally considered to be **seven continents** in the world:\n\n1. **Africa**\n2. **Antarctica**\n3. **Asia**\n4. **Europe**\n5. **North America**\n6. **Australia (Oceania)**\n7. **South America**\n\nHowever, the exact number can vary depending on how continents are defined. For example, some models combine Europe and Asia into a single continent called **Eurasia**, reducing the count to six. Similarly, North and South America are sometimes grouped as the **Americas**, also resulting in six continents. The seven-continent model is the most widely taught and recognized.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_014",
+      "question": "What is the smallest prime number?",
+      "ground_truth": "2",
+      "model_answer": "The smallest prime number is **2**. A prime number is defined as a natural number greater than 1 that has no positive divisors other than 1 and itself. Since 2 is the only even prime number and the smallest natural number greater than 1, it holds this distinction.",
+      "confidence": 0.5,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 20515,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "The smallest prime number is **2**. A prime number is defined as a natural number greater than 1 that has no positive divisors other than 1 and itself. Since 2 is the only even prime number and the smallest natural number greater than 1, it holds this distinction.",
+          "agrees": true
+        },
+        {
+          "model": "StepFun: Step 3.5 Flash (free)",
+          "answer": "The smallest prime number is 2.",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "fact_015",
+      "question": "What is the freezing point of water in Fahrenheit?",
+      "ground_truth": "32",
+      "model_answer": "32",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 8026,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "32°F",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_016",
+      "question": "Who developed the theory of relativity?",
+      "ground_truth": "Albert Einstein",
+      "model_answer": "The theory of relativity was developed by Albert Einstein in the early 20th century. It consists of two parts: the special theory of relativity (1905) and the general theory of relativity (1915). The special theory of relativity introduced concepts such as the constancy of the speed of light and the equivalence of mass and energy (E=mc²). The general theory of relativity expanded on these ideas to include gravity, describing it as the curvature of spacetime caused by mass and energy.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 6670,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "The theory of relativity was developed by Albert Einstein in the early 20th century. It consists of two parts: the special theory of relativity (1905) and the general theory of relativity (1915). The special theory of relativity introduced concepts such as the constancy of the speed of light and the equivalence of mass and energy (E=mc²). The general theory of relativity expanded on these ideas to include gravity, describing it as the curvature of spacetime caused by mass and energy.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_017",
+      "question": "What is the currency of Japan?",
+      "ground_truth": "Yen",
+      "model_answer": "The currency of Japan is the Japanese yen (JPY).",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 10632,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "StepFun: Step 3.5 Flash (free)",
+          "answer": "The currency of Japan is the Japanese yen (JPY).",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "fact_018",
+      "question": "How many sides does a hexagon have?",
+      "ground_truth": "6",
+      "model_answer": "A hexagon is a polygon with six sides. The name \"hexagon\" comes from the Greek words \"hex,\" meaning six, and \"gonia,\" meaning angle. Therefore, a hexagon has **6 sides**.",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 10084,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "A hexagon is a polygon with six sides. The name \"hexagon\" comes from the Greek words \"hex,\" meaning six, and \"gonia,\" meaning angle. Therefore, a hexagon has **6 sides**.",
+          "agrees": true
+        },
+        {
+          "model": "StepFun: Step 3.5 Flash (free)",
+          "answer": "A hexagon has 6 sides.",
+          "agrees": false
+        },
+        {
+          "model": "Qwen: Qwen3 235B A22B Thinking 2507",
+          "answer": "A **hexagon** has **6 sides**.  \n\nThis is true for all hexagons, whether they are **regular** (all sides and angles equal) or **irregular** (sides and angles of different lengths). The name comes from the Greek *hexa-* (meaning \"six\") and *-gon* (meaning \"angle\" or \"corner\").  \n\n**Example**:  \n- A regular hexagon (like a honeycomb cell) has 6 equal sides.  \n- An irregular hexagon (like a stretched or lopsided shape) still has 6 sides, but they may not be equal.  \n\nSo, regardless of its shape, **any hexagon always has 6 sides**. 🐝",
+          "agrees": false
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "total_cases": 17,
+    "accuracy": 1,
+    "avg_confidence": 0.7745098039215687,
+    "ece": 0.2254901960784314,
+    "brier_score": 0.1258169934640523,
+    "confidence_bins": [
+      {
+        "range": "0.0-0.2",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.2-0.4",
+        "count": 2,
+        "accuracy": 1,
+        "avg_confidence": 0.3333333333333333
+      },
+      {
+        "range": "0.4-0.6",
+        "count": 5,
+        "accuracy": 1,
+        "avg_confidence": 0.5
+      },
+      {
+        "range": "0.6-0.8",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.8-1.0",
+        "count": 10,
+        "accuracy": 1,
+        "avg_confidence": 1
+      }
+    ]
+  }
+}

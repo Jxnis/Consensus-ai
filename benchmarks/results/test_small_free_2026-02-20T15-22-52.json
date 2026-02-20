@@ -1,0 +1,176 @@
+{
+  "experiment": "test_small",
+  "budget": "free",
+  "timestamp": "2026-02-20T15:22:52.434Z",
+  "results": [
+    {
+      "id": "test_001",
+      "question": "What is 5 + 7?",
+      "ground_truth": "12",
+      "model_answer": "12",
+      "confidence": 0.6666666666666666,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 8608,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Google: Gemma 3 4B (free)",
+          "answer": "5 + 7 = 12\n",
+          "agrees": true
+        },
+        {
+          "model": "Google: Gemma 3 27B (free)",
+          "answer": "5 + 7 = 12\n",
+          "agrees": true
+        },
+        {
+          "model": "Qwen: Qwen3 VL 30B A3B Thinking",
+          "answer": "The sum of 5 and 7 is **12**.\n\n**Step-by-step explanation:**\n- Start with 5.\n- Add 7:  \n  $ 5 + 1 = 6 $,  \n  $ 6 + 1 = 7 $,  \n  $ 7 + 1 = 8 $,  \n  $ 8 + 1 = 9 $,  \n  $ 9 + 1 = 10 $,  \n  $ 10 + 1 = 11 $,  \n  $ 11 + 1 = 12 $.\n\nAlternatively, recognize that $ 5 + 7 = 12 $ is a standard addition fact.\n\n**Answer:** 12",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "test_002",
+      "question": "What is the capital of France?",
+      "ground_truth": "Paris",
+      "model_answer": "The capital of France is **Paris**.",
+      "confidence": 0.6666666666666666,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 2047,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "LiquidAI: LFM2.5-1.2B-Instruct (free)",
+          "answer": "The capital of France is **Paris**.",
+          "agrees": true
+        },
+        {
+          "model": "Google: Gemma 3n 4B (free)",
+          "answer": "The capital of France is **Paris**. \n",
+          "agrees": true
+        },
+        {
+          "model": "LiquidAI: LFM2.5-1.2B-Thinking (free)",
+          "answer": "The capital of France is **Paris**. \n\nParis serves as the country's political, cultural, and economic center, housing key institutions like the French government, the Élysée Palace, and iconic landmarks such as the Eiffel Tower. \n\n**Answer: Paris** 🇫🇷",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "test_003",
+      "question": "What is 10 * 3?",
+      "ground_truth": "30",
+      "model_answer": "30",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 3382,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "LiquidAI: LFM2.5-1.2B-Thinking (free)",
+          "answer": "The product of 10 and 3 is calculated as follows:  \n$10 \\times 3 = 30$.  \n\n\\boxed{30}",
+          "agrees": true
+        },
+        {
+          "model": "Google: Gemma 3n 4B (free)",
+          "answer": "10 * 3 = 30\n",
+          "agrees": false
+        },
+        {
+          "model": "Arcee AI: Trinity Mini (free)",
+          "answer": "10 * 3 = 30. This is a basic multiplication fact, where multiplying 10 by 3 gives 30.",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "test_004",
+      "question": "Who wrote Romeo and Juliet?",
+      "ground_truth": "William Shakespeare",
+      "model_answer": "The play *Romeo and Juliet* waswritten by **William Shakespeare**.  \n\nShakespeare, an English playwright and poet, is widely regarded as one of the greatest writers in the English language. He wrote *Romeo and Juliet* around **1595–1596**, and it was first published in 1597.  \n\nShakespeare's authorship is well-documented and universally accepted by scholars, though some fringe theories exist (like those proposing other authors wrote his works). However, there is no credible evidence to challenge Shakespeare's role as the sole author of this iconic tragedy.",
+      "confidence": 0.5,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 20558,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Mini (free)",
+          "answer": "\nThe play *Romeo and Juliet* waswritten by **William Shakespeare**.  \n\nShakespeare, an English playwright and poet, is widely regarded as one of the greatest writers in the English language. He wrote *Romeo and Juliet* around **1595–1596**, and it was first published in 1597.  \n\nShakespeare's authorship is well-documented and universally accepted by scholars, though some fringe theories exist (like those proposing other authors wrote his works). However, there is no credible evidence to challenge Shakespeare's role as the sole author of this iconic tragedy.",
+          "agrees": true
+        },
+        {
+          "model": "Qwen: Qwen3 235B A22B Thinking 2507",
+          "answer": "**William Shakespeare** wrote *Romeo and Juliet*.  \n\n### Key Details:\n- **Full Name**: William Shakespeare (1564–1616)  \n- **Nationality**: English  \n- **Era**: Elizabethan/Jacobean period (late 16th to early 17th century)  \n- **Written**: Circa **1595–1596** (during Shakespeare's early career).  \n- **Genre**: Tragedy (one of his most famous).  \n\n### Why It's Significant:\n- Though Shakespeare adapted the story from earlier sources (like Arthur Brooke's 1562 poem *The Tragical History of Romeus and Juliet*), his version became the definitive adaptation.  \n- It revolutionized romantic tragedy with its exploration of young love, family conflict, and fate, influencing countless works in literature, theater, and film.  \n\nShakespeare's authorship is well-documented through historical records, including the First Quarto (1597) and its inclusion in the *First Folio* (1623), published by his colleagues after his death. If you're studying the play, its themes of passion vs. societal strife remain powerfully relevant today! 🎭",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "test_005",
+      "question": "What is the chemical symbol for water?",
+      "ground_truth": "H2O",
+      "model_answer": "The chemical symbol for water is **H₂O**. \n\nThis notation indicates that each water molecule consists of two hydrogen atoms (represented by the \"2\") and one oxygen atom (represented by the \"O\"). \n\nLet me know if you'd like further clarification!",
+      "confidence": 0.5,
+      "is_correct": false,
+      "complexity_tier": "MEDIUM",
+      "latency_ms": 6871,
+      "cost_usd": 0,
+      "votes": [
+        {
+          "model": "LiquidAI: LFM2.5-1.2B-Instruct (free)",
+          "answer": "The chemical symbol for water is **H₂O**. \n\nThis notation indicates that each water molecule consists of two hydrogen atoms (represented by the \"2\") and one oxygen atom (represented by the \"O\"). \n\nLet me know if you'd like further clarification!",
+          "agrees": true
+        },
+        {
+          "model": "Free Models Router",
+          "answer": "Water is made up of two hydrogen atoms and one oxygen atom, so its chemical formula is H₂O. The subscript 2 indicates that there are two hydrogen atoms bonded to one oxygen atom.",
+          "agrees": false
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "total_cases": 5,
+    "accuracy": 0.8,
+    "avg_confidence": 0.5333333333333333,
+    "ece": 0.2666666666666667,
+    "brier_score": 0.23333333333333334,
+    "confidence_bins": [
+      {
+        "range": "0.0-0.2",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.2-0.4",
+        "count": 1,
+        "accuracy": 1,
+        "avg_confidence": 0.3333333333333333
+      },
+      {
+        "range": "0.4-0.6",
+        "count": 2,
+        "accuracy": 0.5,
+        "avg_confidence": 0.5
+      },
+      {
+        "range": "0.6-0.8",
+        "count": 2,
+        "accuracy": 1,
+        "avg_confidence": 0.6666666666666666
+      },
+      {
+        "range": "0.8-1.0",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      }
+    ]
+  }
+}

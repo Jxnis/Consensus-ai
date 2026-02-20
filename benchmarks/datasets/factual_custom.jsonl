@@ -1,0 +1,25 @@
+{"id": "fact_001", "question": "What is the capital of France?", "answer": "Paris", "category": "geography", "difficulty": "easy"}
+{"id": "fact_002", "question": "What year did World War II end?", "answer": "1945", "category": "history", "difficulty": "easy"}
+{"id": "fact_003", "question": "What is the chemical symbol for gold?", "answer": "Au", "category": "science", "difficulty": "easy"}
+{"id": "fact_004", "question": "Who wrote 'Romeo and Juliet'?", "answer": "William Shakespeare", "category": "literature", "difficulty": "easy"}
+{"id": "fact_005", "question": "What is the speed of light in vacuum (in km/s)?", "answer": "299,792", "category": "physics", "difficulty": "medium"}
+{"id": "fact_006", "question": "What is the largest planet in our solar system?", "answer": "Jupiter", "category": "astronomy", "difficulty": "easy"}
+{"id": "fact_007", "question": "What is the boiling point of water at sea level in Celsius?", "answer": "100", "category": "science", "difficulty": "easy"}
+{"id": "fact_008", "question": "Who painted the Mona Lisa?", "answer": "Leonardo da Vinci", "category": "art", "difficulty": "easy"}
+{"id": "fact_009", "question": "What is the square root of 144?", "answer": "12", "category": "math", "difficulty": "easy"}
+{"id": "fact_010", "question": "In what year did the United States declare independence?", "answer": "1776", "category": "history", "difficulty": "easy"}
+{"id": "fact_011", "question": "What is the atomic number of carbon?", "answer": "6", "category": "chemistry", "difficulty": "medium"}
+{"id": "fact_012", "question": "What is the longest river in the world?", "answer": "Nile", "category": "geography", "difficulty": "medium"}
+{"id": "fact_013", "question": "How many continents are there?", "answer": "7", "category": "geography", "difficulty": "easy"}
+{"id": "fact_014", "question": "What is the smallest prime number?", "answer": "2", "category": "math", "difficulty": "easy"}
+{"id": "fact_015", "question": "What is the freezing point of water in Fahrenheit?", "answer": "32", "category": "science", "difficulty": "easy"}
+{"id": "fact_016", "question": "Who developed the theory of relativity?", "answer": "Albert Einstein", "category": "physics", "difficulty": "easy"}
+{"id": "fact_017", "question": "What is the currency of Japan?", "answer": "Yen", "category": "economics", "difficulty": "easy"}
+{"id": "fact_018", "question": "How many sides does a hexagon have?", "answer": "6", "category": "geometry", "difficulty": "easy"}
+{"id": "fact_019", "question": "What is the hardest natural substance on Earth?", "answer": "Diamond", "category": "geology", "difficulty": "medium"}
+{"id": "fact_020", "question": "What is the powerhouse of the cell?", "answer": "Mitochondria", "category": "biology", "difficulty": "easy"}
+{"id": "fact_021", "question": "What year did the Berlin Wall fall?", "answer": "1989", "category": "history", "difficulty": "medium"}
+{"id": "fact_022", "question": "What is the largest ocean on Earth?", "answer": "Pacific Ocean", "category": "geography", "difficulty": "easy"}
+{"id": "fact_023", "question": "What is the value of pi to 2 decimal places?", "answer": "3.14", "category": "math", "difficulty": "easy"}
+{"id": "fact_024", "question": "Who was the first person to walk on the Moon?", "answer": "Neil Armstrong", "category": "space", "difficulty": "easy"}
+{"id": "fact_025", "question": "What is the chemical formula for water?", "answer": "H2O", "category": "chemistry", "difficulty": "easy"}
