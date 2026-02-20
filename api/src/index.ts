@@ -41,6 +41,43 @@ async function hashApiKey(apiKey: string): Promise<string> {
     .join("");
 }
 
+const METRICS_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
+function getUtcDayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function getMetricNumber(kv: KVNamespace, key: string): Promise<number> {
+  const value = await kv.get(key);
+  const parsed = value ? parseFloat(value) : 0;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function addMetricNumber(kv: KVNamespace, key: string, delta: number): Promise<void> {
+  const current = await getMetricNumber(kv, key);
+  await kv.put(key, (current + delta).toString(), { expirationTtl: METRICS_TTL_SECONDS });
+}
+
+async function incrementMetric(kv: KVNamespace, key: string): Promise<void> {
+  await addMetricNumber(kv, key, 1);
+}
+
+function getChargedPriceUsd(authTier: string, budget: string, complexityTier: string): number {
+  if (authTier === "paid") return 0.002;
+
+  // x402 path: variable pricing based on complexity (TASK-59)
+  if (authTier === "free" && budget !== "free") {
+    const priceByTier: Record<string, number> = {
+      SIMPLE: 0.001,
+      MEDIUM: 0.002,
+      COMPLEX: 0.005,
+    };
+    return priceByTier[complexityTier] || 0.002;
+  }
+
+  return 0;
+}
+
 // API Key Authentication Middleware (runs before x402)
 app.use("/v1/*", async (c, next) => {
   const authHeader = c.req.header("Authorization");
@@ -121,7 +158,7 @@ app.use("/v1/*", async (c, next) => {
   return await next();
 });
 
-// Hybrid Middleware: Parse body once and decide whether to enforce x402
+// Hybrid Middleware: Parse body, score prompt, apply dynamic x402 pricing
 app.use("/v1/chat/completions", async (c, next) => {
   const authTier = c.get("authTier" as never) as string | undefined;
 
@@ -130,8 +167,10 @@ app.use("/v1/chat/completions", async (c, next) => {
     return await next();
   }
 
-  // Parse body once, store in context to avoid double-parsing
+  // Parse body once, extract prompt, score complexity
   let budget = "";
+  let complexityTier: "SIMPLE" | "MEDIUM" | "COMPLEX" = "MEDIUM"; // default
+
   try {
     const rawBody = await c.req.raw.clone().text();
 
@@ -141,21 +180,39 @@ app.use("/v1/chat/completions", async (c, next) => {
 
     const body = JSON.parse(rawBody);
     budget = String(body.budget ?? "").toLowerCase();
-    // Store parsed body in context to avoid double-parse in handler
+
+    // Extract prompt and score complexity for dynamic pricing
+    const messages = body.messages as Array<{role: string; content: string}> | undefined;
+    const prompt = messages?.[messages.length - 1]?.content || "";
+
+    if (prompt && typeof prompt === "string") {
+      const complexity = scorePrompt(prompt);
+      complexityTier = complexity.tier;
+    }
+
+    // Store parsed body and complexity in context to avoid re-parsing/re-scoring
     c.set("parsedBody" as never, body as never);
+    c.set("complexityTier" as never, complexityTier as never);
   } catch {
     // JSON parse error or empty body — treat as free tier
     budget = "free";
   }
 
   // Unauthenticated users with no explicit budget get free tier
-  // Fixes the bug where missing budget triggered x402 enforcement
   if (budget === "free" || budget === "") {
     return await next();
   }
 
-  // Budget explicitly set (e.g. "low", "medium", "high") but no auth → enforce x402
-  console.log(`[Auth] Unauthenticated request with budget="${budget}". Enforcing x402.`);
+  // Dynamic x402 pricing based on complexity tier (TASK-59)
+  const X402_PRICE_BY_TIER: Record<string, string> = {
+    SIMPLE: "$0.001",   // Free models only (~1-2 models, simple factual queries)
+    MEDIUM: "$0.002",   // Cheap paid models (3-4 models, moderate reasoning)
+    COMPLEX: "$0.005",  // Premium models (4-5 models including GPT-4o/Gemini Pro)
+  };
+
+  const x402Price = X402_PRICE_BY_TIER[complexityTier];
+
+  console.log(`[Auth] Unauthenticated request with budget="${budget}". Enforcing x402. Complexity: ${complexityTier}, Price: ${x402Price}`);
 
   if (!c.env.X402_WALLET_ADDRESS) {
     return c.json({
@@ -171,12 +228,12 @@ app.use("/v1/chat/completions", async (c, next) => {
           accepts: [
             {
               scheme: "exact",
-              price: "$0.002",
+              price: x402Price, // Dynamic price based on prompt complexity
               network: "eip155:8453", // Base Mainnet
               payTo: c.env.X402_WALLET_ADDRESS,
             },
           ],
-          description: "CouncilRouter — multi-model consensus verification",
+          description: `CouncilRouter — ${complexityTier} query consensus verification`,
           mimeType: "application/json",
         },
       },
@@ -185,7 +242,7 @@ app.use("/v1/chat/completions", async (c, next) => {
 
     return await dynamicHandler(c, next);
   } catch (error: unknown) {
-    // x402 facilitator may not support mainnet yet — return manual 402 instead of 500
+    // x402 facilitator error — return manual 402 with dynamic price
     console.error("[x402] Middleware error:", error instanceof Error ? error.message : String(error));
     return c.json({
       error: "Payment required",
@@ -193,11 +250,11 @@ app.use("/v1/chat/completions", async (c, next) => {
         version: 2,
         accepts: [{
           scheme: "exact",
-          price: "$0.002",
+          price: x402Price, // Return dynamic price in error response
           network: "eip155:8453",
           payTo: c.env.X402_WALLET_ADDRESS,
         }],
-        description: "CouncilRouter — multi-model consensus verification. Send x402 payment headers or use budget='free' for free tier.",
+        description: `CouncilRouter — ${complexityTier} query. Price varies by complexity: SIMPLE ($0.001), MEDIUM ($0.002), COMPLEX ($0.005). Use budget='free' for free tier.`,
       },
     }, 402);
   }
@@ -205,6 +262,8 @@ app.use("/v1/chat/completions", async (c, next) => {
 
 // Main Endpoint: Run consensus logic
 app.post("/v1/chat/completions", async (c) => {
+  const requestStartedAt = Date.now();
+
   // Use pre-parsed body if available (avoids double-parse)
   const body = (c.get("parsedBody" as never) as Record<string, unknown>) || await c.req.json();
   const messages = body.messages as Array<{role: string; content: string}> | undefined;
@@ -235,7 +294,9 @@ app.post("/v1/chat/completions", async (c) => {
     budget = "free";
   }
 
-  const complexity = scorePrompt(sanitizedPrompt);
+  // Use pre-scored complexity from middleware if available (avoids redundant scoring)
+  const preScored = c.get("complexityTier" as never) as "SIMPLE" | "MEDIUM" | "COMPLEX" | undefined;
+  const complexity = preScored ? { tier: preScored } : scorePrompt(sanitizedPrompt);
   const engine = new CouncilEngine(c.env);
 
   const request: ConsensusRequest = {
@@ -245,9 +306,53 @@ app.post("/v1/chat/completions", async (c) => {
   };
 
   const wantsStream = body.stream === true;
+  const dayKey = getUtcDayKey();
+  const metricsPrefix = `metrics:${dayKey}`;
+
+  // 52a: daily counters by requests + tier
+  await Promise.all([
+    incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_total`),
+    incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:${authTier}`),
+    wantsStream
+      ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:stream_requests`)
+      : Promise.resolve(),
+  ]);
 
   try {
+    const consensusStartedAt = Date.now();
+    console.log(`[Monitoring] runConsensus:start tier=${authTier} budget=${budget} stream=${wantsStream}`);
     const result = await engine.runConsensus(request, complexity.tier);
+    const consensusLatencyMs = Date.now() - consensusStartedAt;
+    const totalLatencyMs = Date.now() - requestStartedAt;
+    console.log(`[Monitoring] runConsensus:done latency_ms=${consensusLatencyMs} total_ms=${totalLatencyMs}`);
+
+    const estimatedTotalCostUsd = result.monitoring?.estimatedTotalCostUsd ?? 0;
+    const chargedPriceUsd = getChargedPriceUsd(authTier, budget, complexity.tier);
+    const marginAlert = estimatedTotalCostUsd > chargedPriceUsd;
+
+    // 52a/52c/52d/52e monitoring metrics
+    await Promise.all([
+      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:confidence_sum`, result.confidence),
+      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:confidence_count`),
+      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_consensus_sum_ms`, consensusLatencyMs),
+      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_consensus_count`),
+      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_sum_ms`, totalLatencyMs),
+      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_count`),
+      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_total_usd`, estimatedTotalCostUsd),
+      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_model_usd`, result.monitoring?.estimatedModelCostUsd ?? 0),
+      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_embedding_usd`, result.monitoring?.estimatedEmbeddingCostUsd ?? 0),
+      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_chairman_usd`, result.monitoring?.estimatedChairmanCostUsd ?? 0),
+      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:charged_total_usd`, chargedPriceUsd),
+      result.monitoring?.usedChairman
+        ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:chairman_path_count`)
+        : Promise.resolve(),
+      result.monitoring?.usedEmbeddings
+        ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:embedding_path_count`)
+        : Promise.resolve(),
+      marginAlert
+        ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:margin_alert_count`)
+        : Promise.resolve(),
+    ]);
 
     // Track Stripe usage for paid tier
     const stripeSubscriptionId = c.get("stripeSubscriptionId" as never) as string | undefined;
@@ -339,6 +444,10 @@ app.post("/v1/chat/completions", async (c) => {
       }
     });
   } catch (error: unknown) {
+    await incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`);
+    const failedTotalLatencyMs = Date.now() - requestStartedAt;
+    console.log(`[Monitoring] runConsensus:error total_ms=${failedTotalLatencyMs}`);
+
     if (error instanceof Error && error.message.startsWith("[BUDGET_GUARDRAIL]")) {
       // x402 + stream edge case: budget guardrail fired before any stream started (50d)
       if (wantsStream) {
@@ -399,8 +508,8 @@ app.get("/", (c) => {
     docs: "https://councilrouter.ai/docs",
     tiers: {
       free: "No auth required. Free models only, 20 req/hour.",
-      paid: "API key required. All budget tiers, Stripe metered billing.",
-      x402: "USDC payment on Base Mainnet. $0.002 per request."
+      paid: "API key required. All budget tiers, Stripe metered billing, $0.002 per request.",
+      x402: "USDC payment on Base Mainnet. Variable pricing: $0.001 (simple), $0.002 (medium), $0.005 (complex)."
     }
   });
 });
@@ -452,6 +561,100 @@ app.post("/admin/create-key", async (c) => {
   );
 
   return c.json({ apiKey, userId: body.userId, tier: body.tier });
+});
+
+// Admin: Monitoring stats (requires admin auth)
+app.get("/admin/stats", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const date = c.req.query("date") || getUtcDayKey();
+  const metricsPrefix = `metrics:${date}`;
+
+  const [
+    requestsTotal,
+    errorsTotal,
+    confidenceSum,
+    confidenceCount,
+    latencyConsensusSum,
+    latencyConsensusCount,
+    latencyTotalSum,
+    latencyTotalCount,
+    estimatedCostTotal,
+    estimatedModelCost,
+    estimatedEmbeddingCost,
+    estimatedChairmanCost,
+    chargedTotal,
+    marginAlertCount,
+    chairmanPathCount,
+    embeddingPathCount,
+    streamRequests,
+    freeRequests,
+    playgroundRequests,
+    paidRequests,
+  ] = await Promise.all([
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_total`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:confidence_sum`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:confidence_count`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_consensus_sum_ms`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_consensus_count`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_sum_ms`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_count`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_total_usd`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_model_usd`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_embedding_usd`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_chairman_usd`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:charged_total_usd`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:margin_alert_count`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:chairman_path_count`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:embedding_path_count`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:stream_requests`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:free`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:playground`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:paid`),
+  ]);
+
+  const avgConfidence = confidenceCount > 0 ? confidenceSum / confidenceCount : 0;
+  const avgConsensusLatencyMs = latencyConsensusCount > 0 ? latencyConsensusSum / latencyConsensusCount : 0;
+  const avgTotalLatencyMs = latencyTotalCount > 0 ? latencyTotalSum / latencyTotalCount : 0;
+  const estimatedMarginUsd = chargedTotal - estimatedCostTotal;
+
+  return c.json({
+    date,
+    summary: {
+      requests_total: requestsTotal,
+      errors_total: errorsTotal,
+      error_rate: requestsTotal > 0 ? errorsTotal / requestsTotal : 0,
+      avg_confidence: avgConfidence,
+      avg_consensus_latency_ms: avgConsensusLatencyMs,
+      avg_total_latency_ms: avgTotalLatencyMs,
+    },
+    traffic: {
+      stream_requests: streamRequests,
+      by_tier: {
+        free: freeRequests,
+        playground: playgroundRequests,
+        paid: paidRequests,
+      },
+    },
+    cost: {
+      estimated_total_usd: estimatedCostTotal,
+      estimated_model_usd: estimatedModelCost,
+      estimated_embedding_usd: estimatedEmbeddingCost,
+      estimated_chairman_usd: estimatedChairmanCost,
+      charged_total_usd: chargedTotal,
+      estimated_margin_usd: estimatedMarginUsd,
+      margin_alert_count: marginAlertCount,
+      chairman_path_count: chairmanPathCount,
+      embedding_path_count: embeddingPathCount,
+    },
+  });
 });
 
 export default app;

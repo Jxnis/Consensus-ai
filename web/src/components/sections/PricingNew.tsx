@@ -20,13 +20,13 @@ const plans = [
   {
     name: "Developer",
     subtitle: "Startups & AI Agents",
-    price: "$0.002",
+    price: "$0.001–$0.005",
     period: "/ request",
     features: [
       "3–5 smart models",
       "Chairman synthesis",
       "1,000 req / hour",
-      "API key access",
+      "Variable pricing by complexity",
       "x402 micropayments (USDC)",
     ],
     cta: "Start Building",

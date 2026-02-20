@@ -112,6 +112,7 @@ export class CouncilEngine {
     let confidence = topGroup.count / results.length;
     let modelUsed = topGroup.models[0];
     let synthesized = false;
+    let usedChairman = false;
 
     if (confidence < 0.6 && tier !== "SIMPLE" && request.budget !== "free") {
       console.log(`[CouncilEngine] Low confidence (${confidence.toFixed(2)}). Escalating to Chairman...`);
@@ -134,12 +135,48 @@ export class CouncilEngine {
       finalAnswer = chairmanResponse.choices[0]?.message?.content || finalAnswer;
       modelUsed = "CHAIRMAN (Gemini 2.0 Flash)";
       synthesized = true;
+      usedChairman = true;
     }
+
+    const estimatedInputTokens = Math.max(1, Math.ceil(prompt.length / 4));
+    const estimateOutputTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4));
+    const selectedByName = new Map(selectedModels.map(m => [m.name, m]));
+
+    const estimatedModelCostUsd = results.reduce((sum, r) => {
+      const model = selectedByName.get(r.model);
+      if (!model) return sum;
+      const inputCost = (estimatedInputTokens / 1_000_000) * model.inputPrice;
+      const outputCost = (estimateOutputTokens(r.answer) / 1_000_000) * model.outputPrice;
+      return sum + inputCost + outputCost;
+    }, 0);
+
+    const usedEmbeddings = !isFreeTier;
+    // Approximate embedding cost for text-embedding-3-small input pricing.
+    const embeddingPricePer1M = 0.02;
+    const estimatedEmbeddingTokens = usedEmbeddings
+      ? results.reduce((sum, r) => sum + Math.max(1, Math.ceil(r.answer.length / 4)), 0)
+      : 0;
+    const estimatedEmbeddingCostUsd = usedEmbeddings
+      ? (estimatedEmbeddingTokens / 1_000_000) * embeddingPricePer1M
+      : 0;
+
+    const estimatedChairmanCostUsd = usedChairman ? 0.0002 : 0;
+    const estimatedTotalCostUsd = estimatedModelCostUsd + estimatedEmbeddingCostUsd + estimatedChairmanCostUsd;
 
     const consensusResponse: ConsensusResponse = {
       answer: finalAnswer,
       confidence,
       ...(synthesized ? { synthesized: true } : {}),
+      monitoring: {
+        selectedModels: selectedModels.map(m => m.name),
+        respondedModels: results.map(r => r.model),
+        usedChairman,
+        usedEmbeddings,
+        estimatedModelCostUsd,
+        estimatedEmbeddingCostUsd,
+        estimatedChairmanCostUsd,
+        estimatedTotalCostUsd,
+      },
       votes: votesWithAgreement,
       complexity: tier,
       cached: false,

@@ -196,7 +196,7 @@ main();`}
                             <span className="text-blue-500 text-xs font-bold">02</span>
                         </div>
                         <h3 className="font-heading text-lg mb-2">Developer Key</h3>
-                        <p className="text-sm text-muted-foreground mb-4">1,000 req/hour. $0.002 per request.</p>
+                        <p className="text-sm text-muted-foreground mb-4">1,000 req/hour. $0.001–$0.005 per request (variable pricing).</p>
                         <code className="text-xs bg-muted px-2 py-1 rounded">Authorization: Bearer sk_...</code>
                     </div>
                 </div>
@@ -210,6 +210,7 @@ main();`}
                      Full endpoint reference is being finalized. Core endpoint today: <code className="text-xs bg-muted px-2 py-1 rounded">POST /v1/chat/completions</code>.
                    </p>
                 </div>
+
             </section>
 
             {/* SDKs */}
@@ -346,7 +347,7 @@ opencode
                             </tr>
                             <tr>
                                 <td className="p-4 font-bold text-foreground">Developer</td>
-                                <td className="p-4 text-muted-foreground">$0.002 / req</td>
+                                <td className="p-4 text-muted-foreground">$0.001–$0.005 / req</td>
                                 <td className="p-4 text-muted-foreground">1,000 / hr</td>
                             </tr>
                             <tr>
@@ -356,6 +357,30 @@ opencode
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <div className="bg-muted/30 border border-border rounded-xl p-6">
+                    <h3 className="font-heading text-lg mb-3 text-foreground">Variable Pricing (Developer Tier)</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                        Pricing varies based on query complexity. Your prompt is automatically scored, and you only pay for what you need:
+                    </p>
+                    <div className="space-y-2 font-mono text-xs">
+                        <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
+                            <span className="text-foreground">SIMPLE queries</span>
+                            <span className="text-muted-foreground">$0.001 / request</span>
+                        </div>
+                        <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
+                            <span className="text-foreground">MEDIUM queries</span>
+                            <span className="text-muted-foreground">$0.002 / request</span>
+                        </div>
+                        <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
+                            <span className="text-foreground">COMPLEX queries</span>
+                            <span className="text-muted-foreground">$0.005 / request</span>
+                        </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-4">
+                        <strong>x402 micropayments:</strong> Pay with USDC on Base Mainnet. Your wallet will show the exact price before you approve the payment.
+                    </p>
                 </div>
             </section>
             

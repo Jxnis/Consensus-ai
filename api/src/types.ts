@@ -28,6 +28,16 @@ export interface ConsensusResponse {
   answer: string;
   confidence: number;
   synthesized?: boolean;
+  monitoring?: {
+    selectedModels: string[];
+    respondedModels: string[];
+    usedChairman: boolean;
+    usedEmbeddings: boolean;
+    estimatedModelCostUsd: number;
+    estimatedEmbeddingCostUsd: number;
+    estimatedChairmanCostUsd: number;
+    estimatedTotalCostUsd: number;
+  };
   votes: {
     model: string;
     answer: string;
