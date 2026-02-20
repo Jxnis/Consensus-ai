@@ -64,7 +64,7 @@ const QuickStartSection = () => {
             </div>
             
             <p className="mt-6 text-center text-xs font-mono text-muted-foreground">
-                Compatible with standard OpenAI SDKs and libraries.
+                Compatible with OpenAI SDKs, OpenCode, Cursor, Cline, and all OpenAI-compatible tools.
             </p>
         </motion.div>
       </div>

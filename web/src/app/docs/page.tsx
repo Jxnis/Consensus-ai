@@ -215,10 +215,111 @@ main();`}
             {/* SDKs */}
             <section id="sdks" className="space-y-8 scroll-mt-24">
                 <div>
-                   <h2 className="font-heading text-2xl text-foreground mb-4">SDKs</h2>
+                   <h2 className="font-heading text-2xl text-foreground mb-4">SDKs & Integrations</h2>
                    <p className="text-muted-foreground">
-                     OpenAI-compatible SDK examples are available now. Dedicated SDK guides are coming soon.
+                     CouncilRouter works with any OpenAI-compatible client. Below are tested integrations.
                    </p>
+                </div>
+
+                <div className="space-y-6">
+                  {/* OpenAI SDK */}
+                  <div className="border border-border rounded-xl p-6 bg-card">
+                    <h3 className="font-heading text-lg mb-3 text-foreground">OpenAI Python SDK</h3>
+                    <div className="bg-[#0a0a0b] p-4 rounded-lg border border-white/10 overflow-x-auto">
+<pre className="text-zinc-300 font-mono text-xs leading-relaxed">
+{`from openai import OpenAI
+
+client = OpenAI(
+    base_url="${apiUrl}",
+    api_key="sk_your_key"  # Optional for free tier
+)
+
+# Non-streaming
+response = client.chat.completions.create(
+    model="council-router-v1",
+    messages=[{"role": "user", "content": "Explain quantum computing"}]
+)
+
+# Streaming
+stream = client.chat.completions.create(
+    model="council-router-v1",
+    messages=[{"role": "user", "content": "Write a sorting algorithm"}],
+    stream=True
+)
+
+for chunk in stream:
+    print(chunk.choices[0].delta.content, end="")`}
+</pre>
+                    </div>
+                  </div>
+
+                  {/* OpenCode */}
+                  <div className="border border-border rounded-xl p-6 bg-card">
+                    <h3 className="font-heading text-lg mb-3 text-foreground">OpenCode (AI Coding Agent)</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Use CouncilRouter as your coding agent with multi-model consensus verification.
+                    </p>
+                    <div className="bg-[#0a0a0b] p-4 rounded-lg border border-white/10 overflow-x-auto mb-4">
+<pre className="text-zinc-300 font-mono text-xs leading-relaxed">
+{`# 1. Install OpenCode
+curl -fsSL https://opencode.ai/install | bash
+
+# 2. Add config to ~/.config/opencode/opencode.json
+{
+  "provider": {
+    "councilrouter": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "CouncilRouter",
+      "options": {
+        "baseURL": "${apiUrl}"
+      },
+      "models": {
+        "council-router-v1": {
+          "name": "CouncilRouter v1"
+        }
+      }
+    }
+  }
+}
+
+# 3. Start OpenCode and select the model
+opencode
+/model councilrouter:council-router-v1`}
+</pre>
+                    </div>
+                    <a
+                      href="https://gist.github.com/councilrouter/opencode-integration"
+                      className="text-xs text-blue-500 hover:underline font-mono"
+                    >
+                      → Full OpenCode integration guide
+                    </a>
+                  </div>
+
+                  {/* Other Tools */}
+                  <div className="border border-border rounded-xl p-6 bg-card">
+                    <h3 className="font-heading text-lg mb-3 text-foreground">Other Compatible Tools</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      CouncilRouter works with any tool that supports custom OpenAI base URLs:
+                    </p>
+                    <ul className="space-y-2 text-sm text-muted-foreground font-mono">
+                      <li className="flex items-start gap-2">
+                        <span className="text-green-500">✓</span>
+                        <span><strong>Cursor:</strong> Set custom OpenAI endpoint in settings</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-green-500">✓</span>
+                        <span><strong>Cline:</strong> Configure custom LLM provider</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-green-500">✓</span>
+                        <span><strong>LangChain:</strong> Use ChatOpenAI with custom base_url</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-green-500">✓</span>
+                        <span><strong>LlamaIndex:</strong> Configure OpenAI-compatible endpoint</span>
+                      </li>
+                    </ul>
+                  </div>
                 </div>
             </section>
 
