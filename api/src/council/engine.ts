@@ -8,6 +8,7 @@ export class CouncilEngine {
   private openai: OpenAI;
   private kv: KVNamespace;
   private apiKey: string;
+  private static METRICS_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
   constructor(env: CloudflareBindings) {
     this.apiKey = env.OPENROUTER_API_KEY;
@@ -30,9 +31,11 @@ export class CouncilEngine {
     const cacheKey = await this.hashPrompt(cacheScope);
     const cached = await this.kv.get(cacheKey);
     if (cached) {
+      await this.incrementCounter(`metrics:${this.getUtcDayKey()}:cache_hit`);
       console.log(`[CouncilEngine] Cache HIT for prompt hash: ${cacheKey.slice(0, 8)}`);
       return { ...(JSON.parse(cached) as ConsensusResponse), cached: true };
     }
+    await this.incrementCounter(`metrics:${this.getUtcDayKey()}:cache_miss`);
 
     // 1. Get model registry — merge crawled + reliable fallback models
     let allModels: ModelInfo[];
@@ -309,10 +312,16 @@ export class CouncilEngine {
           const content = response.choices[0]?.message?.content || "";
           if (content.trim()) {
             results.push({ model: model.name, answer: content });
+          } else {
+            void this.incrementCounter(`model_failure:${model.id}:empty_response`);
           }
           tryResolve();
         }).catch(err => {
-          if (err.name === "AbortError") return;
+          if (err.name === "AbortError") {
+            void this.incrementCounter(`model_failure:${model.id}:timeout`);
+            return;
+          }
+          void this.incrementCounter(`model_failure:${model.id}:provider_error`);
           console.error(`[CouncilEngine] Model ${model.name} failed:`, err.message);
         }).finally(() => {
           activeRequests--;
@@ -320,6 +329,16 @@ export class CouncilEngine {
         });
       });
     });
+  }
+
+  private getUtcDayKey(): string {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  private async incrementCounter(key: string): Promise<void> {
+    const current = await this.kv.get(key);
+    const count = current ? parseInt(current, 10) : 0;
+    await this.kv.put(key, String(count + 1), { expirationTtl: CouncilEngine.METRICS_TTL_SECONDS });
   }
 
   private getFallbackModels(): ModelInfo[] {

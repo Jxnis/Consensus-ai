@@ -263,6 +263,7 @@ app.use("/v1/chat/completions", async (c, next) => {
 // Main Endpoint: Run consensus logic
 app.post("/v1/chat/completions", async (c) => {
   const requestStartedAt = Date.now();
+  const requestId = `cons-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 
   // Use pre-parsed body if available (avoids double-parse)
   const body = (c.get("parsedBody" as never) as Record<string, unknown>) || await c.req.json();
@@ -270,20 +271,20 @@ app.post("/v1/chat/completions", async (c) => {
   const prompt = messages?.[messages.length - 1]?.content || "";
 
   if (!prompt || typeof prompt !== "string") {
-    return c.json({ error: "No valid prompt provided" }, 400);
+    return c.json({ error: "No valid prompt provided", request_id: requestId }, 400);
   }
 
   if (prompt.length > 8000) {
-    return c.json({ error: "Prompt exceeds maximum length of 8000 characters" }, 400);
+    return c.json({ error: "Prompt exceeds maximum length of 8000 characters", request_id: requestId }, 400);
   }
 
   const sanitizedPrompt = prompt.replace(/\0/g, "").trim();
   if (sanitizedPrompt.length === 0) {
-    return c.json({ error: "Prompt cannot be empty" }, 400);
+    return c.json({ error: "Prompt cannot be empty", request_id: requestId }, 400);
   }
 
   if (!c.env.OPENROUTER_API_KEY) {
-    return c.json({ error: "Service temporarily unavailable" }, 503);
+    return c.json({ error: "Service temporarily unavailable", request_id: requestId }, 503);
   }
 
   const authTier = (c.get("authTier" as never) as string) || "free";
@@ -320,11 +321,11 @@ app.post("/v1/chat/completions", async (c) => {
 
   try {
     const consensusStartedAt = Date.now();
-    console.log(`[Monitoring] runConsensus:start tier=${authTier} budget=${budget} stream=${wantsStream}`);
+    console.log(`[Monitoring] runConsensus:start request_id=${requestId} tier=${authTier} budget=${budget} stream=${wantsStream}`);
     const result = await engine.runConsensus(request, complexity.tier);
     const consensusLatencyMs = Date.now() - consensusStartedAt;
     const totalLatencyMs = Date.now() - requestStartedAt;
-    console.log(`[Monitoring] runConsensus:done latency_ms=${consensusLatencyMs} total_ms=${totalLatencyMs}`);
+    console.log(`[Monitoring] runConsensus:done request_id=${requestId} latency_ms=${consensusLatencyMs} total_ms=${totalLatencyMs}`);
 
     const estimatedTotalCostUsd = result.monitoring?.estimatedTotalCostUsd ?? 0;
     const chargedPriceUsd = getChargedPriceUsd(authTier, budget, complexity.tier);
@@ -365,7 +366,7 @@ app.post("/v1/chat/completions", async (c) => {
 
     // --- SSE Streaming path ---
     if (wantsStream) {
-      const id = `cons-${Date.now()}`;
+      const id = requestId;
       const created = Math.floor(Date.now() / 1000);
       const encoder = new TextEncoder();
 
@@ -422,7 +423,7 @@ app.post("/v1/chat/completions", async (c) => {
 
     // --- Non-streaming JSON path (unchanged) ---
     return c.json({
-      id: `cons-${Date.now()}`,
+      id: requestId,
       object: "chat.completion",
       created: Math.floor(Date.now() / 1000),
       model: "council-router-v1",
@@ -446,43 +447,46 @@ app.post("/v1/chat/completions", async (c) => {
   } catch (error: unknown) {
     await incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`);
     const failedTotalLatencyMs = Date.now() - requestStartedAt;
-    console.log(`[Monitoring] runConsensus:error total_ms=${failedTotalLatencyMs}`);
+    console.log(`[Monitoring] runConsensus:error request_id=${requestId} total_ms=${failedTotalLatencyMs}`);
 
     if (error instanceof Error && error.message.startsWith("[BUDGET_GUARDRAIL]")) {
       // x402 + stream edge case: budget guardrail fired before any stream started (50d)
       if (wantsStream) {
         const encoder = new TextEncoder();
-        const errPayload = { id: `cons-err-${Date.now()}`, object: "chat.completion.chunk",
+        const errPayload = { id: requestId, object: "chat.completion.chunk",
           created: Math.floor(Date.now() / 1000), model: "council-router-v1",
           choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-          error: "Budget policy exceeded. Simplify the prompt or increase budget tier." };
+          error: "Budget policy exceeded. Simplify the prompt or increase budget tier.",
+          request_id: requestId };
         return new Response(
           encoder.encode(`data: ${JSON.stringify(errPayload)}\n\ndata: [DONE]\n\n`),
           { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } }
         );
       }
       return c.json({
-        error: "Budget policy exceeded. Simplify the prompt or increase budget tier."
+        error: "Budget policy exceeded. Simplify the prompt or increase budget tier.",
+        request_id: requestId
       }, 400);
     }
 
     // Log internally, return generic message to avoid leaking internals
-    console.error("[CouncilRouter] Consensus error:", error instanceof Error ? error.message : String(error));
+    console.error(`[CouncilRouter] Consensus error request_id=${requestId}:`, error instanceof Error ? error.message : String(error));
 
     if (wantsStream) {
       // Emit streaming error so clients don't hang waiting for [DONE] (50d)
       const encoder = new TextEncoder();
-      const errPayload = { id: `cons-err-${Date.now()}`, object: "chat.completion.chunk",
+      const errPayload = { id: requestId, object: "chat.completion.chunk",
         created: Math.floor(Date.now() / 1000), model: "council-router-v1",
         choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-        error: "Consensus processing failed. Please try again." };
+        error: "Consensus processing failed. Please try again.",
+        request_id: requestId };
       return new Response(
         encoder.encode(`data: ${JSON.stringify(errPayload)}\n\ndata: [DONE]\n\n`),
         { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } }
       );
     }
 
-    return c.json({ error: "Consensus processing failed. Please try again." }, 500);
+    return c.json({ error: "Consensus processing failed. Please try again.", request_id: requestId }, 500);
   }
 });
 
@@ -597,6 +601,8 @@ app.get("/admin/stats", async (c) => {
     freeRequests,
     playgroundRequests,
     paidRequests,
+    cacheHitCount,
+    cacheMissCount,
   ] = await Promise.all([
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_total`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`),
@@ -618,6 +624,8 @@ app.get("/admin/stats", async (c) => {
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:free`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:playground`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:paid`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cache_hit`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cache_miss`),
   ]);
 
   const avgConfidence = confidenceCount > 0 ? confidenceSum / confidenceCount : 0;
@@ -637,6 +645,11 @@ app.get("/admin/stats", async (c) => {
     },
     traffic: {
       stream_requests: streamRequests,
+      cache: {
+        hit: cacheHitCount,
+        miss: cacheMissCount,
+        hit_rate: (cacheHitCount + cacheMissCount) > 0 ? cacheHitCount / (cacheHitCount + cacheMissCount) : 0,
+      },
       by_tier: {
         free: freeRequests,
         playground: playgroundRequests,
