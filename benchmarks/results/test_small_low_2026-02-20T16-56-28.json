@@ -1,0 +1,146 @@
+{
+  "experiment": "test_small",
+  "budget": "low",
+  "timestamp": "2026-02-20T16:56:28.141Z",
+  "results": [
+    {
+      "id": "test_001",
+      "question": "What is 5 + 7?",
+      "ground_truth": "12",
+      "model_answer": "12",
+      "confidence": 0.3333333333333333,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 11435,
+      "cost_usd": 0.002,
+      "votes": [
+        {
+          "model": "StepFun: Step 3.5 Flash (free)",
+          "answer": "5 + 7 equals 12.",
+          "agrees": true
+        },
+        {
+          "model": "Free Models Router",
+          "answer": "5 + 7 = 12",
+          "agrees": false
+        },
+        {
+          "model": "Qwen: Qwen3 VL 235B A22B Thinking",
+          "answer": "The sum of 5 and 7 is **12**. \n\n**Step-by-Step Explanation:**  \n1. Start with the number **5**.  \n2. Add **7** to it:  \n   - 5 + 1 = 6  \n   - 6 + 1 = 7  \n   - 7 + 1 = 8  \n   - 8 + 1 = 9  \n   - 9 + 1 = 10  \n   - 10 + 1 = 11  \n   - 11 + 1 = **12**  \n\n**Answer:** 5 + 7 = **12**.",
+          "agrees": false
+        }
+      ]
+    },
+    {
+      "id": "test_002",
+      "question": "What is the capital of France?",
+      "ground_truth": "Paris",
+      "model_answer": "The capital of France is **Paris**. It is the largest city in France and is known for its rich history, culture, art, and landmarks such as the Eiffel Tower, the Louvre Museum, and Notre-Dame Cathedral.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 6021,
+      "cost_usd": 0.002,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "The capital of France is **Paris**. It is the largest city in France and is known for its rich history, culture, art, and landmarks such as the Eiffel Tower, the Louvre Museum, and Notre-Dame Cathedral.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "test_003",
+      "question": "What is 10 * 3?",
+      "ground_truth": "30",
+      "model_answer": "30",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 6587,
+      "cost_usd": 0.002,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "30",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "test_004",
+      "question": "Who wrote Romeo and Juliet?",
+      "ground_truth": "William Shakespeare",
+      "model_answer": "\"Romeo and Juliet\" was written by William Shakespeare, the renowned English playwright and poet of the late 16th and early 17th centuries. This tragic love story is one of his most famous works and has been widely performed and adapted over the centuries.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "SIMPLE",
+      "latency_ms": 8822,
+      "cost_usd": 0.002,
+      "votes": [
+        {
+          "model": "Arcee AI: Trinity Large Preview (free)",
+          "answer": "\"Romeo and Juliet\" was written by William Shakespeare, the renowned English playwright and poet of the late 16th and early 17th centuries. This tragic love story is one of his most famous works and has been widely performed and adapted over the centuries.",
+          "agrees": true
+        }
+      ]
+    },
+    {
+      "id": "test_005",
+      "question": "What is the chemical symbol for water?",
+      "ground_truth": "H2O",
+      "model_answer": "The chemical formula for water is H₂O.",
+      "confidence": 1,
+      "is_correct": true,
+      "complexity_tier": "MEDIUM",
+      "latency_ms": 11934,
+      "cost_usd": 0.002,
+      "votes": [
+        {
+          "model": "Free Models Router",
+          "answer": "The chemical formula for water is H₂O.",
+          "agrees": true
+        }
+      ]
+    }
+  ],
+  "metrics": {
+    "total_cases": 5,
+    "accuracy": 1,
+    "avg_confidence": 0.8666666666666666,
+    "ece": 0.13333333333333336,
+    "brier_score": 0.0888888888888889,
+    "confidence_bins": [
+      {
+        "range": "0.0-0.2",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.2-0.4",
+        "count": 1,
+        "accuracy": 1,
+        "avg_confidence": 0.3333333333333333
+      },
+      {
+        "range": "0.4-0.6",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.6-0.8",
+        "count": 0,
+        "accuracy": 0,
+        "avg_confidence": 0
+      },
+      {
+        "range": "0.8-1.0",
+        "count": 4,
+        "accuracy": 1,
+        "avg_confidence": 1
+      }
+    ]
+  }
+}
