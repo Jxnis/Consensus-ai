@@ -129,32 +129,37 @@ registerExactEvmScheme(x402Server);
 
 // Rate Limiting Middleware
 app.use("/v1/*", async (c, next) => {
-  const clientIP = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
-  const authTier = (c.get("authTier" as never) as string) || "free";
-  const userId = (c.get("userId" as never) as string) || clientIP;
+  try {
+    const clientIP = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
+    const authTier = (c.get("authTier" as never) as string) || "free";
+    const userId = (c.get("userId" as never) as string) || clientIP;
 
-  const limits: Record<string, number> = {
-    free: 20,
-    playground: 50,
-    paid: 1000,
-  };
+    const limits: Record<string, number> = {
+      free: 20,
+      playground: 50,
+      paid: 1000,
+    };
 
-  const limit = limits[authTier] || 20;
-  const key = `ratelimit:${authTier}:${userId}`;
+    const limit = limits[authTier] || 20;
+    const key = `ratelimit:${authTier}:${userId}`;
 
-  const current = await c.env.CONSENSUS_CACHE.get(key);
-  const count = current ? parseInt(current) : 0;
+    const current = await c.env.CONSENSUS_CACHE.get(key);
+    const count = current ? parseInt(current) : 0;
 
-  if (count >= limit) {
-    return c.json({
-      error: "Rate limit exceeded",
-      limit,
-      tier: authTier,
-      message: `Max ${limit} requests per hour for ${authTier} tier.`
-    }, 429);
+    if (count >= limit) {
+      return c.json({
+        error: "Rate limit exceeded",
+        limit,
+        tier: authTier,
+        message: `Max ${limit} requests per hour for ${authTier} tier.`
+      }, 429);
+    }
+
+    await c.env.CONSENSUS_CACHE.put(key, String(count + 1), { expirationTtl: 3600 });
+  } catch (err) {
+    // Don't block requests if rate limiting fails — just log and continue
+    console.error("[RateLimit] Middleware error:", err instanceof Error ? err.message : String(err));
   }
-
-  await c.env.CONSENSUS_CACHE.put(key, String(count + 1), { expirationTtl: 3600 });
   return await next();
 });
 
@@ -311,13 +316,17 @@ app.post("/v1/chat/completions", async (c) => {
   const metricsPrefix = `metrics:${dayKey}`;
 
   // 52a: daily counters by requests + tier
-  await Promise.all([
-    incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_total`),
-    incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:${authTier}`),
-    wantsStream
-      ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:stream_requests`)
-      : Promise.resolve(),
-  ]);
+  try {
+    await Promise.all([
+      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_total`),
+      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:${authTier}`),
+      wantsStream
+        ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:stream_requests`)
+        : Promise.resolve(),
+    ]);
+  } catch (kvErr) {
+    console.error('[Metrics] KV write failed (non-critical):', kvErr instanceof Error ? kvErr.message : String(kvErr));
+  }
 
   try {
     const consensusStartedAt = Date.now();
@@ -332,28 +341,32 @@ app.post("/v1/chat/completions", async (c) => {
     const marginAlert = estimatedTotalCostUsd > chargedPriceUsd;
 
     // 52a/52c/52d/52e monitoring metrics
-    await Promise.all([
-      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:confidence_sum`, result.confidence),
-      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:confidence_count`),
-      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_consensus_sum_ms`, consensusLatencyMs),
-      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_consensus_count`),
-      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_sum_ms`, totalLatencyMs),
-      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_count`),
-      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_total_usd`, estimatedTotalCostUsd),
-      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_model_usd`, result.monitoring?.estimatedModelCostUsd ?? 0),
-      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_embedding_usd`, result.monitoring?.estimatedEmbeddingCostUsd ?? 0),
-      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_chairman_usd`, result.monitoring?.estimatedChairmanCostUsd ?? 0),
-      addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:charged_total_usd`, chargedPriceUsd),
-      result.monitoring?.usedChairman
-        ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:chairman_path_count`)
-        : Promise.resolve(),
-      result.monitoring?.usedEmbeddings
-        ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:embedding_path_count`)
-        : Promise.resolve(),
-      marginAlert
-        ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:margin_alert_count`)
-        : Promise.resolve(),
-    ]);
+    try {
+      await Promise.all([
+        addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:confidence_sum`, result.confidence),
+        incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:confidence_count`),
+        addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_consensus_sum_ms`, consensusLatencyMs),
+        incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_consensus_count`),
+        addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_sum_ms`, totalLatencyMs),
+        incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_count`),
+        addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_total_usd`, estimatedTotalCostUsd),
+        addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_model_usd`, result.monitoring?.estimatedModelCostUsd ?? 0),
+        addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_embedding_usd`, result.monitoring?.estimatedEmbeddingCostUsd ?? 0),
+        addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cost_estimated_chairman_usd`, result.monitoring?.estimatedChairmanCostUsd ?? 0),
+        addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:charged_total_usd`, chargedPriceUsd),
+        result.monitoring?.usedChairman
+          ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:chairman_path_count`)
+          : Promise.resolve(),
+        result.monitoring?.usedEmbeddings
+          ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:embedding_path_count`)
+          : Promise.resolve(),
+        marginAlert
+          ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:margin_alert_count`)
+          : Promise.resolve(),
+      ]);
+    } catch (kvErr) {
+      console.error('[Metrics] Post-consensus KV write failed (non-critical):', kvErr instanceof Error ? kvErr.message : String(kvErr));
+    }
 
     // Track Stripe usage for paid tier
     const stripeSubscriptionId = c.get("stripeSubscriptionId" as never) as string | undefined;
@@ -442,10 +455,13 @@ app.post("/v1/chat/completions", async (c) => {
         tier: result.complexity,
         votes: result.votes,
         budget,
+        synthesized: result.synthesized ?? false,
+        cached: result.cached,
+        monitoring: result.monitoring,
       }
     });
   } catch (error: unknown) {
-    await incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`);
+    try { await incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`); } catch { /* KV limit */ }
     const failedTotalLatencyMs = Date.now() - requestStartedAt;
     console.log(`[Monitoring] runConsensus:error request_id=${requestId} total_ms=${failedTotalLatencyMs}`);
 

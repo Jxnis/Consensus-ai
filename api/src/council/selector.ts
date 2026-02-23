@@ -41,27 +41,27 @@ export class CouncilSelector {
 
     switch (tier) {
       case "SIMPLE":
-        // Select 8 models to race — target 3 responses (free models have ~50% failure rate)
+        // 31-FIX-2: Select 10 models to race — target 3 responses (free models have ~50% failure rate)
         selected = this.pickRandom(
           [...freeModels, ...cheapModels],
-          8
+          10
         );
         break;
 
       case "MEDIUM":
-        // 6 models: 3 cheap + 1 smart + 2 free — target 3 responses
+        // 31-FIX-2: 8 models: 3 cheap + 2 smart + 3 free — target 3 responses
         selected = [
           ...this.pickRandom(cheapModels.length > 0 ? cheapModels : freeModels, 3),
-          ...this.pickRandom(smartModels.length > 0 ? smartModels : cheapModels, 1),
-          ...this.pickRandom(freeModels, 2),
+          ...this.pickRandom(smartModels.length > 0 ? smartModels : cheapModels, 2),
+          ...this.pickRandom(freeModels, 3),
         ];
         break;
 
       case "COMPLEX":
-        // 6 models: 2 cheap + 4 smart — target 4 responses
+        // 31-FIX-2: 8 models: 3 cheap + 5 smart — target 4 responses
         selected = [
-          ...this.pickRandom(cheapModels.length > 0 ? cheapModels : freeModels, 2),
-          ...this.pickRandom(smartModels.length > 0 ? smartModels : cheapModels, 4),
+          ...this.pickRandom(cheapModels.length > 0 ? cheapModels : freeModels, 3),
+          ...this.pickRandom(smartModels.length > 0 ? smartModels : cheapModels, 5),
         ];
         break;
     }
