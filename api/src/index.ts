@@ -135,7 +135,7 @@ app.use("/v1/*", async (c, next) => {
     const userId = (c.get("userId" as never) as string) || clientIP;
 
     const limits: Record<string, number> = {
-      free: 20,
+      free: 200,   // TEMP: raised for benchmarking — restore to 20 after Feb 25
       playground: 50,
       paid: 1000,
     };
