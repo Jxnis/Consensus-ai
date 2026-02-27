@@ -203,6 +203,16 @@ app.use("/v1/chat/completions", async (c, next) => {
     budget = "free";
   }
 
+  // TASK-A5: Reject mode=default BEFORE x402 payment — never bill for unimplemented feature
+  // parsedBody was stored in context above; safe to read here even if parse failed (returns undefined)
+  const parsedBodyForMode = c.get("parsedBody" as never) as Record<string, unknown> | undefined;
+  if (parsedBodyForMode?.mode === "default") {
+    return c.json({
+      error: "mode=default not yet implemented",
+      message: "Smart routing is coming in Phase 4. Use mode='council' for consensus, or omit mode for backward compatibility.",
+    }, 501);
+  }
+
   // Unauthenticated users with no explicit budget get free tier
   if (budget === "free" || budget === "") {
     return await next();

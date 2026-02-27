@@ -152,7 +152,10 @@ export class CouncilEngine {
     let usedChairman = false;
 
     // 5. Check agreement: if top group has majority, skip deliberation (FAST PATH)
-    const majorityThreshold = Math.ceil(results.length / 2 + 1);
+    // True majority = more than 50%. floor(n/2) + 1 ensures >50% for all n:
+    // n=3: floor(1.5)+1 = 2 (66.7%) | n=4: floor(2)+1 = 3 (75%) | n=5: floor(2.5)+1 = 3 (60%)
+    // Previous bugs: ceil(n/2+1) required unanimity; ceil(n/2) accepted 50% ties
+    const majorityThreshold = Math.floor(results.length / 2) + 1;
     const hasMajority = topGroup.count >= majorityThreshold;
 
     if (hasMajority) {
