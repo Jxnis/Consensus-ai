@@ -79,7 +79,35 @@ export class CouncilEngine {
       .sort((a, b) => a.pricePer1M - b.pricePer1M)
       .slice(0, 4);
 
-    const results = await this.raceModels(prompt, selectedModels, targetCount, tier, backupModels);
+    let results = await this.raceModels(prompt, selectedModels, targetCount, tier, backupModels);
+    let isDegraded = false;
+
+    // FIX-10: Enforce minimum council size — retry with emergency fallback if < 2 models responded
+    if (results.length < 2) {
+      console.warn(`[CouncilEngine] FIX-10: Only ${results.length} model(s) responded. Attempting emergency fallback round...`);
+
+      // Find untried models: exclude selectedModels and backupModels
+      const triedIds = new Set([
+        ...selectedModels.map(m => m.id),
+        ...backupModels.map(m => m.id)
+      ]);
+      const emergencyModels = allModels
+        .filter(m => !triedIds.has(m.id) && budgetFilter(m))
+        .sort((a, b) => a.pricePer1M - b.pricePer1M)
+        .slice(0, 3);  // Try 3 more models
+
+      if (emergencyModels.length > 0) {
+        console.log(`[CouncilEngine] FIX-10: Firing ${emergencyModels.length} emergency fallback models...`);
+        const emergencyResults = await this.raceModels(prompt, emergencyModels, 2, tier, []);
+        results = [...results, ...emergencyResults];
+      }
+
+      // Mark as degraded if still < 2
+      if (results.length < 2) {
+        isDegraded = true;
+        console.warn(`[CouncilEngine] FIX-10: Council degraded — only ${results.length} model(s) responded. Proceeding with degraded flag.`);
+      }
+    }
 
     if (results.length === 0) {
       throw new Error("All models in the council failed. Please check connectivity.");
@@ -111,9 +139,66 @@ export class CouncilEngine {
       };
     }
 
-    const topGroup = groups[0];
+    // TASK-A4: Deliberation round logic
+    let topGroup = groups[0];
+    const round1Groups = groups.length;
+    let round2GroupCount: number | undefined = undefined;
+    let deliberationTriggered = false;
+    let deliberationRounds = 1;
+    let finalAnswer = topGroup.answer;
+    let confidence = topGroup.count / results.length;
+    let modelUsed = topGroup.models[0];
+    let synthesized = false;
+    let usedChairman = false;
 
-    // 5. Compute votes — reuse grouping results (no extra embedding calls)
+    // 5. Check agreement: if top group has majority, skip deliberation (FAST PATH)
+    const majorityThreshold = Math.ceil(results.length / 2 + 1);
+    const hasMajority = topGroup.count >= majorityThreshold;
+
+    if (hasMajority) {
+      console.log(`[CouncilEngine] FAST PATH: ${topGroup.count}/${results.length} models agree (≥${majorityThreshold}). Skipping deliberation.`);
+    } else {
+      // TASK-A4: DELIBERATION ROUND — models disagree, give them a second chance
+      deliberationTriggered = true;
+      deliberationRounds = 2;
+      console.log(`[CouncilEngine] DELIBERATION: ${topGroup.count}/${results.length} models agree (<${majorityThreshold}). Firing Round 2...`);
+
+      // Build deliberation prompt with all Round 1 answers (anonymized)
+      const deliberationPrompt = this.buildDeliberationPrompt(prompt, results);
+
+      // Fire SAME models again with deliberation context (reuse existing models)
+      const respondedModels = results.map(r =>
+        selectedModels.find(m => m.id === r.model)  // BUG-1 FIX: Use ID for reliable lookups
+      ).filter((m): m is ModelInfo => m !== undefined);
+
+      const round2Results = await this.raceModels(deliberationPrompt, respondedModels, respondedModels.length, tier, []);  // BUG-2 FIX: Try to get ALL Round 1 respondents back
+
+      if (round2Results.length > 0) {
+        console.log(`[CouncilEngine] Round 2: ${round2Results.length} models responded.`);
+
+        // Re-group Round 2 responses
+        const round2GroupsArray = await ConsensusMatcher.groupSimilarResponses(
+          round2Results,
+          this.openai,
+          embeddingCache,
+          isFreeTier
+        );
+
+        if (round2GroupsArray.length > 0) {
+          topGroup = round2GroupsArray[0];
+          confidence = topGroup.count / round2Results.length;
+          modelUsed = topGroup.models[0];
+          finalAnswer = topGroup.answer;
+          round2GroupCount = round2GroupsArray.length;
+          results = round2Results; // Use Round 2 for final votes
+          console.log(`[CouncilEngine] Round 2 result: ${topGroup.count}/${round2Results.length} models agree.`);
+        }
+      } else {
+        console.warn(`[CouncilEngine] Round 2 failed: no models responded. Using Round 1 results.`);
+      }
+    }
+
+    // 6. Compute final votes
     const agreingModelNames = new Set(topGroup.models);
     const votesWithAgreement = results.map(r => ({
       model: r.model,
@@ -121,18 +206,12 @@ export class CouncilEngine {
       agrees: agreingModelNames.has(r.model)
     }));
 
-    // 6. Chairman synthesis if confidence is low (paid tiers only)
-    let finalAnswer = topGroup.answer;
-    let confidence = topGroup.count / results.length;
-    let modelUsed = topGroup.models[0];
-    let synthesized = false;
-    let usedChairman = false;
-
+    // 7. Chairman synthesis if still no clear consensus (after deliberation)
     if (confidence < 0.6 && tier !== "SIMPLE" && request.budget !== "free") {
-      console.log(`[CouncilEngine] Low confidence (${confidence.toFixed(2)}). Escalating to Chairman...`);
+      console.log(`[CouncilEngine] Still low confidence (${confidence.toFixed(2)}) after ${deliberationRounds} rounds. Escalating to Chairman...`);
 
       const chairmanResponse = await this.openai.chat.completions.create({
-        model: "google/gemini-2.0-flash-001",
+        model: "deepseek/deepseek-chat",  // BUG-3 FIX: Stronger model for synthesis (79.9% GPQA, cheap at $0.27/M)
         messages: [
           {
             role: "system",
@@ -181,6 +260,14 @@ export class CouncilEngine {
       answer: finalAnswer,
       confidence,
       ...(synthesized ? { synthesized: true } : {}),
+      ...(isDegraded ? { degraded: true } : {}),  // FIX-10: Flag degraded councils
+      deliberation: {  // TASK-A4: Deliberation metadata
+        triggered: deliberationTriggered,
+        rounds: deliberationRounds,
+        round1_groups: round1Groups,
+        ...(round2GroupCount !== undefined ? { round2_groups: round2GroupCount } : {}),
+        chairman_used: usedChairman,
+      },
       monitoring: {
         selectedModels: selectedModels.map(m => m.name),
         respondedModels: results.map(r => r.model),
@@ -360,7 +447,7 @@ export class CouncilEngine {
           if (controller.signal.aborted) return;
           const content = response.choices[0]?.message?.content || "";
           if (content.trim()) {
-            results.push({ model: model.name, answer: content });
+            results.push({ model: model.id, answer: content });  // BUG-1 FIX: Use ID for reliable lookups
           } else {
             void this.incrementCounter(`model_failure:${model.id}:empty_response`);
           }
@@ -381,7 +468,7 @@ export class CouncilEngine {
       // Wave 1: Fire all selected models
       models.forEach(model => fireModel(model));
 
-      // 31-FIX-2: Wave 2 — if after 8s we still don't have enough responses, fire backups
+      // FIX-9: Wave 2 — if after 4s we still don't have enough responses, fire backups
       if (backupModels.length > 0) {
         setTimeout(() => {
           if (isResolved) return;
@@ -392,9 +479,31 @@ export class CouncilEngine {
           } else {
             wave2Fired = true; // Mark as done so tryResolve works
           }
-        }, 8000);
+        }, 4000);  // FIX-9: Lowered from 8s — backup models fire faster
       }
     });
+  }
+
+  /**
+   * TASK-A4: Build deliberation prompt with Round 1 answers.
+   * Models see all other responses (anonymized) and reconsider.
+   */
+  private buildDeliberationPrompt(
+    originalPrompt: string,
+    round1Results: { model: string; answer: string }[]
+  ): string {
+    const anonymizedResponses = round1Results
+      .map((r, i) => `Model ${String.fromCharCode(65 + i)}: ${r.answer}`)
+      .join("\n\n");
+
+    return `You were asked: "${originalPrompt}"
+
+Here are the responses from other AI models (anonymized):
+
+${anonymizedResponses}
+
+Some of these responses disagree. Please carefully consider all perspectives, identify which reasoning is strongest, and provide your final answer.
+Focus on accuracy and correctness over agreeing with the majority.`;
   }
 
   private getUtcDayKey(): string {
@@ -426,7 +535,11 @@ export class CouncilEngine {
       { id: "openai/gpt-4o-mini", name: "GPT-4o mini", provider: "OpenAI", pricePer1M: 0.15, inputPrice: 0.15, outputPrice: 0.60, isFree: false, contextLength: 128000 },
       { id: "google/gemini-2.0-flash-001", name: "Gemini 2.0 Flash", provider: "Google", pricePer1M: 0.10, inputPrice: 0.10, outputPrice: 0.40, isFree: false, contextLength: 1048576 },
       { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku", provider: "Anthropic", pricePer1M: 0.25, inputPrice: 0.25, outputPrice: 1.25, isFree: false, contextLength: 200000 },
+      { id: "deepseek/deepseek-chat", name: "DeepSeek V3.2", provider: "DeepSeek", pricePer1M: 0.27, inputPrice: 0.14, outputPrice: 0.28, isFree: false, contextLength: 65536 },  // CONCERN-2 FIX: Quality-ranked paid model
       { id: "meta-llama/llama-3.1-70b-instruct", name: "Llama 3.1 70B", provider: "Meta", pricePer1M: 0.35, inputPrice: 0.35, outputPrice: 0.40, isFree: false, contextLength: 131072 },
+      { id: "qwen/qwen-2.5-72b-instruct", name: "Qwen 2.5 72B", provider: "Qwen", pricePer1M: 0.50, inputPrice: 0.40, outputPrice: 0.60, isFree: false, contextLength: 131072 },  // CONCERN-2 FIX: Quality-ranked paid model
+      { id: "z-ai/glm-5", name: "GLM-5", provider: "Zhipu AI", pricePer1M: 1.0, inputPrice: 1.0, outputPrice: 1.0, isFree: false, contextLength: 131072 },  // CONCERN-2 FIX: Frontier-class (86.0% GPQA)
+      { id: "moonshotai/kimi-k2.5", name: "Kimi K2.5", provider: "Moonshot AI", pricePer1M: 2.0, inputPrice: 2.0, outputPrice: 2.0, isFree: false, contextLength: 1048576 },  // CONCERN-2 FIX: Frontier-class (87.6% GPQA)
       { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", pricePer1M: 2.50, inputPrice: 2.50, outputPrice: 10.0, isFree: false, contextLength: 128000 },
       { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "Google", pricePer1M: 1.25, inputPrice: 1.25, outputPrice: 10.0, isFree: false, contextLength: 1048576 },
     ];

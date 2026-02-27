@@ -305,11 +305,25 @@ app.post("/v1/chat/completions", async (c) => {
   const complexity = preScored ? { tier: preScored } : scorePrompt(sanitizedPrompt);
   const engine = new CouncilEngine(c.env);
 
+  // TASK-A5: Extract mode parameter (routing logic in Phase 4)
+  const rawMode = body.mode as string | undefined;
+  const mode: "default" | "council" = (rawMode === "default" || rawMode === "council") ? rawMode : "council";
+
   const request: ConsensusRequest = {
     prompt: sanitizedPrompt,
     budget: ["free", "low", "medium", "high"].includes(budget) ? (budget as ConsensusRequest["budget"]) : "low",
-    reliability: (body.reliability === "high" ? "high" : "standard")
+    reliability: (body.reliability === "high" ? "high" : "standard"),
+    mode,
   };
+
+  // TASK-A5: mode=default stub (routing logic in Phase 4 - TASK-C2)
+  if (mode === "default") {
+    return c.json({
+      error: "mode=default not yet implemented",
+      message: "Smart routing is coming in Phase 4. Use mode='council' for multi-model consensus, or omit mode parameter for backward compatibility.",
+      request_id: requestId,
+    }, 501);
+  }
 
   const wantsStream = body.stream === true;
   const dayKey = getUtcDayKey();
@@ -398,6 +412,9 @@ app.post("/v1/chat/completions", async (c) => {
         budget,
         synthesized: result.synthesized ?? false,
         cached: result.cached,
+        mode_used: mode,  // TASK-A5: Track which mode was used
+        degraded: result.degraded ?? false,  // CONCERN-3 FIX: Expose degraded council flag
+        deliberation: result.deliberation,   // CONCERN-3 FIX: Expose deliberation metadata
       };
 
       const readable = new ReadableStream({
@@ -458,6 +475,9 @@ app.post("/v1/chat/completions", async (c) => {
         synthesized: result.synthesized ?? false,
         cached: result.cached,
         monitoring: result.monitoring,
+        mode_used: mode,  // TASK-A5: Track which mode was used
+        degraded: result.degraded ?? false,  // CONCERN-3 FIX: Expose degraded council flag
+        deliberation: result.deliberation,   // CONCERN-3 FIX: Expose deliberation metadata
       }
     });
   } catch (error: unknown) {
