@@ -226,17 +226,17 @@ export class CouncilEngine {
       });
 
       finalAnswer = chairmanResponse.choices[0]?.message?.content || finalAnswer;
-      modelUsed = "CHAIRMAN (Gemini 2.0 Flash)";
+      modelUsed = "CHAIRMAN (DeepSeek V3.2)";  // LEFTOVER-1 FIX: Update label to match model
       synthesized = true;
       usedChairman = true;
     }
 
     const estimatedInputTokens = Math.max(1, Math.ceil(prompt.length / 4));
     const estimateOutputTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4));
-    const selectedByName = new Map(selectedModels.map(m => [m.name, m]));
+    const selectedById = new Map(selectedModels.map(m => [m.id, m]));  // LEFTOVER-2 FIX: Use ID not name (results now store model.id)
 
     const estimatedModelCostUsd = results.reduce((sum, r) => {
-      const model = selectedByName.get(r.model);
+      const model = selectedById.get(r.model);  // LEFTOVER-2 FIX: Lookup by ID
       if (!model) return sum;
       const inputCost = (estimatedInputTokens / 1_000_000) * model.inputPrice;
       const outputCost = (estimateOutputTokens(r.answer) / 1_000_000) * model.outputPrice;
