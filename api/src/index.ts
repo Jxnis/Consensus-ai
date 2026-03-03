@@ -5,9 +5,11 @@ import { paymentMiddleware } from "@x402/hono";
 import { x402ResourceServer, HTTPFacilitatorClient } from "@x402/core/server";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
 import { z } from "zod";
-import { scorePrompt } from "./router/scorer";
+import { scorePrompt, detectTopic } from "./router/scorer";
+import { selectBestModel } from "./router/model-registry";
 import { CouncilEngine } from "./council/engine";
 import { ConsensusRequest, CloudflareBindings } from "./types";
+import OpenAI from "openai";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -203,14 +205,52 @@ app.use("/v1/chat/completions", async (c, next) => {
     budget = "free";
   }
 
-  // TASK-A5: Reject mode=default BEFORE x402 payment — never bill for unimplemented feature
+  // TASK-2: Smart routing (mode=default) — route to best single model based on topic detection
   // parsedBody was stored in context above; safe to read here even if parse failed (returns undefined)
   const parsedBodyForMode = c.get("parsedBody" as never) as Record<string, unknown> | undefined;
   if (parsedBodyForMode?.mode === "default") {
-    return c.json({
-      error: "mode=default not yet implemented",
-      message: "Smart routing is coming in Phase 4. Use mode='council' for consensus, or omit mode for backward compatibility.",
-    }, 501);
+    const body = parsedBodyForMode;
+    const messages = body.messages as Array<{role: string; content: string}> | undefined;
+    const prompt = messages?.[messages.length - 1]?.content || "";
+
+    // Detect topic and select best model
+    const topic = detectTopic(prompt);
+    const bestModel = selectBestModel(topic, complexityTier, budget);
+
+    // Call selected model directly through OpenRouter
+    const openai = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: c.env.OPENROUTER_API_KEY,
+    });
+
+    try {
+      const completion = await openai.chat.completions.create({
+        model: bestModel.id,
+        messages: body.messages as any,
+        temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
+        max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+      });
+
+      // Return OpenAI-compatible response with routing metadata
+      return c.json({
+        ...completion,
+        routing: {
+          mode: 'default',
+          selected_model: bestModel.id,
+          model_name: bestModel.name,
+          topic_detected: topic,
+          complexity_tier: complexityTier,
+          budget: budget,
+          selection_reason: `Best ${topic} model within ${budget || 'any'} budget (score: ${bestModel.strengths[topic] ?? bestModel.overall})`,
+        }
+      });
+    } catch (error: any) {
+      return c.json({
+        error: "Smart routing failed",
+        message: error.message || "Failed to call selected model",
+        selected_model: bestModel.id,
+      }, 500);
+    }
   }
 
   // Unauthenticated users with no explicit budget get free tier

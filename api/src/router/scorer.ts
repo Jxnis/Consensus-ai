@@ -52,3 +52,51 @@ export function scorePrompt(prompt: string): ComplexityScore {
     reason: `Self-scored ${tier} (score: ${score}) based on length and keyword density.`
   };
 }
+
+/**
+ * TASK-2: Topic Detection for Smart Routing (mode=default)
+ */
+export type TopicCategory = 'code' | 'math' | 'science' | 'writing' | 'general';
+
+export function detectTopic(prompt: string): TopicCategory {
+  // Score each category with weighted keyword matches
+  const scores: Record<TopicCategory, number> = {
+    code: 0, math: 0, science: 0, writing: 0, general: 0
+  };
+
+  // CODE markers
+  const codeMarkers = [
+    /\b(function|class|def|import|const|let|var|async|await|return)\b/i,
+    /\b(implement|debug|refactor|compile|runtime|typescript|python|javascript|react|API|endpoint|SQL|query|database)\b/i,
+    /[{}\[\]();]/, // brackets/semicolons suggest code
+    /```/, // markdown code blocks
+  ];
+
+  // MATH markers
+  const mathMarkers = [
+    /\b(calculate|compute|solve|equation|integral|derivative|probability|statistical|algebra|proof|theorem)\b/i,
+    /\b(matrix|vector|eigenvalue|polynomial|logarithm|factorial)\b/i,
+    /[=+\-*/^].*\d/, // math operators with numbers
+  ];
+
+  // SCIENCE markers
+  const scienceMarkers = [
+    /\b(molecule|enzyme|protein|phenotype|genome|quantum|electron|photon|thermodynamic|reaction|catalyst|spectroscopy)\b/i,
+    /\b(hypothesis|experiment|observation|empirical|physics|chemistry|biology|neuroscience)\b/i,
+  ];
+
+  // WRITING markers
+  const writingMarkers = [
+    /\b(write|essay|article|blog|summarize|paraphrase|rewrite|translate|creative|story|poem|email|letter)\b/i,
+    /\b(tone|style|persuasive|narrative|draft|edit|proofread)\b/i,
+  ];
+
+  codeMarkers.forEach(m => { if (m.test(prompt)) scores.code += 10; });
+  mathMarkers.forEach(m => { if (m.test(prompt)) scores.math += 10; });
+  scienceMarkers.forEach(m => { if (m.test(prompt)) scores.science += 10; });
+  writingMarkers.forEach(m => { if (m.test(prompt)) scores.writing += 10; });
+
+  // Find highest scoring category (default to 'general')
+  const best = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
+  return (best[1] > 0 ? best[0] : 'general') as TopicCategory;
+}

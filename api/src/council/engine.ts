@@ -150,6 +150,7 @@ export class CouncilEngine {
     let modelUsed = topGroup.models[0];
     let synthesized = false;
     let usedChairman = false;
+    let round1ResultsForCost: typeof results = []; // COST-BUG FIX: Track Round 1 for accurate cost telemetry
 
     // 5. Check agreement: if top group has majority, skip deliberation (FAST PATH)
     // True majority = more than 50%. floor(n/2) + 1 ensures >50% for all n:
@@ -193,6 +194,8 @@ export class CouncilEngine {
           modelUsed = topGroup.models[0];
           finalAnswer = topGroup.answer;
           round2GroupCount = round2GroupsArray.length;
+          // COST-BUG FIX: Save Round 1 results before overwriting (needed for accurate cost telemetry)
+          round1ResultsForCost = [...results];
           results = round2Results; // Use Round 2 for final votes
           console.log(`[CouncilEngine] Round 2 result: ${topGroup.count}/${round2Results.length} models agree.`);
         }
@@ -238,7 +241,12 @@ export class CouncilEngine {
     const estimateOutputTokens = (text: string) => Math.max(1, Math.ceil(text.length / 4));
     const selectedById = new Map(selectedModels.map(m => [m.id, m]));  // LEFTOVER-2 FIX: Use ID not name (results now store model.id)
 
-    const estimatedModelCostUsd = results.reduce((sum, r) => {
+    // COST-BUG FIX: Accumulate costs across ALL rounds (Round 1 + Round 2 if deliberation happened)
+    const allResultsForCost = deliberationTriggered
+      ? [...round1ResultsForCost, ...results]
+      : results;
+
+    const estimatedModelCostUsd = allResultsForCost.reduce((sum, r) => {
       const model = selectedById.get(r.model);  // LEFTOVER-2 FIX: Lookup by ID
       if (!model) return sum;
       const inputCost = (estimatedInputTokens / 1_000_000) * model.inputPrice;
@@ -256,7 +264,15 @@ export class CouncilEngine {
       ? (estimatedEmbeddingTokens / 1_000_000) * embeddingPricePer1M
       : 0;
 
-    const estimatedChairmanCostUsd = usedChairman ? 0.0002 : 0;
+    // COST-BUG FIX: Calculate actual chairman cost based on tokens (DeepSeek: $0.14/M input, $0.28/M output)
+    let estimatedChairmanCostUsd = 0;
+    if (usedChairman) {
+      const chairmanSystemPrompt = "You are the Chairman of an AI Council. Analyze multiple conflicting responses and synthesize the most accurate, neutral, and helpful answer. Return ONLY the final synthesized answer.";
+      const chairmanUserPrompt = `Prompt: ${prompt}\n\nCouncil Responses:\n${results.map((r, i) => `Model ${i + 1} (${r.model}): ${r.answer}`).join("\n\n")}`;
+      const chairmanInputTokens = Math.ceil((chairmanSystemPrompt.length + chairmanUserPrompt.length) / 4);
+      const chairmanOutputTokens = estimateOutputTokens(finalAnswer);
+      estimatedChairmanCostUsd = (chairmanInputTokens / 1_000_000) * 0.14 + (chairmanOutputTokens / 1_000_000) * 0.28;
+    }
     const estimatedTotalCostUsd = estimatedModelCostUsd + estimatedEmbeddingCostUsd + estimatedChairmanCostUsd;
 
     const consensusResponse: ConsensusResponse = {
