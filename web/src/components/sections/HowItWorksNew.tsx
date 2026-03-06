@@ -4,23 +4,23 @@ import { useRef } from "react";
 const steps = [
   {
     num: "01",
-    title: "Dynamic Selection",
-    body: "Every request gets a task-specific council of models chosen based on your budget and complexity tier — free open-source models for exploratory queries, smarter models for critical ones.",
+    title: "Detect Topic",
+    body: "Regex-based topic detection across 24 granular categories in under 5ms. Identifies code/frontend, math/calculus, science/physics, etc. Two-pass approach: broad category first, then subcategory refinement.",
   },
   {
     num: "02",
-    title: "Parallel Execution",
-    body: "All model calls fire simultaneously. We collect responses as they arrive and abort the rest once we have enough — minimizing latency while gathering diverse answers.",
+    title: "Query Benchmark DB",
+    body: "D1 SQL query fetches models ranked by value score (quality ÷ cost) for your topic and budget tier. Real benchmark data from HuggingFace, LiveBench, and GPQA. Falls back to hardcoded registry if DB unavailable.",
   },
   {
     num: "03",
-    title: "Semantic Verification",
-    body: "Responses are compared using semantic similarity. When models agree, we return the consensus answer with a confidence score. When they disagree, you know the answer is contested.",
+    title: "Circuit Breaker Check",
+    body: "KV-based health check ensures the selected model isn't in a failure state. If circuit is open (3 consecutive failures), automatically route to next-best model. 3-model failover chain for >99% success rate.",
   },
   {
     num: "04",
-    title: "Chairman Synthesis",
-    body: "On low-confidence results, a synthesis model reads all responses and produces a final arbitrated answer — surfacing the most defensible position from the council's disagreement.",
+    title: "Stream Response",
+    body: "Forward request to OpenRouter with the selected model. Full SSE streaming support with routing metadata in response headers (X-CouncilRouter-Model, X-CouncilRouter-Topic, X-CouncilRouter-Value-Score). Council mode available for multi-model consensus.",
   },
 ];
 
@@ -68,7 +68,7 @@ const HowItWorksNew = () => {
               How it works
             </span>
             <h2 className="font-heading text-5xl md:text-7xl text-foreground tracking-[-0.03em]">
-              The Consensus Engine
+              Smart Routing Engine
             </h2>
           </div>
         </motion.div>

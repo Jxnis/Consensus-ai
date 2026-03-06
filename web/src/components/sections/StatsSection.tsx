@@ -2,9 +2,9 @@ import { motion, useInView } from "motion/react";
 import { useRef, useState, useEffect } from "react";
 
 const stats = [
-  { label: "Models per request", value: 3, suffix: "–5", desc: "Free tier uses 3 open-source models. Developer tier scales up to 5 for harder queries." },
-  { label: "Cost vs GPT-4o", value: 60, suffix: "%", desc: "Consensus across 3 cheap models costs less than a single frontier model call at equivalent token count." },
-  { label: "Fewer hallucinations", value: 0, suffix: "", display: "↓", desc: "Cross-model verification catches disagreements. Doesn't eliminate hallucinations — but surfaces them." },
+  { label: "Models tracked", value: 200, suffix: "+", display: undefined, desc: "Daily pricing and benchmark updates from OpenRouter. Smart routing selects best value model per topic." },
+  { label: "Topic categories", value: 24, suffix: "", display: undefined, desc: "Granular detection: code/frontend, math/calculus, science/physics. Better routing accuracy than broad categories." },
+  { label: "Benchmark sources", value: 3, suffix: "", display: undefined, desc: "HuggingFace Leaderboard v2, LiveBench (Jan 2026), internal GPQA runs. Updated daily at 6 AM UTC." },
 ];
 
 const AnimatedNumber = ({ target, suffix, display }: { target: number; suffix: string; display?: string }) => {

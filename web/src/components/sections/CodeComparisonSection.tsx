@@ -1,31 +1,30 @@
 import { motion, useInView } from "motion/react";
 import { useRef, useState } from "react";
 
-const singleModelCode = `$ query: "Scan sub-processor agreement for liability shifts."
+const singleModelCode = `$ query: "Explain OAuth 2.0 authorization code flow"
 
 {
-  "analysis": "Liability limited to direct damages. 
-    Standard indemnification applies.",
-  "risk_score": 3,
-  "verification": null,
-  "confidence": null,
-  "model": "gpt-4o"
+  "response": "OAuth 2.0 authorization code flow involves...",
+  "model": "gpt-4o",
+  "cost": "$0.0075",
+  "latency": "2.1s",
+  "routing": null
 }`;
 
-const consensusCode = `$ query: "Scan sub-processor agreement for liability shifts."
+const consensusCode = `$ query: "Explain OAuth 2.0 authorization code flow"
 
 {
-  "analysis": "CRITICAL: Liability cap excludes data breach. 
-    Indemnity clause is one-sided (Vendor only).",
-  "risk_score": 8,
-  "verification": {
-    "semantic_overlap": 0.91,
-    "council_agreement": true,
-    "flagged_by": ["llama-3.1-70b", "gemini-flash"]
+  "response": "OAuth 2.0 authorization code flow is...",
+  "routing": {
+    "topic": "code/security",
+    "selected_model": "deepseek/deepseek-chat",
+    "quality_score": 82,
+    "value_score": 94,
+    "data_source": "database"
   },
-  "confidence": 0.94,
-  "council": ["llama-3.1-70b", "gemini-flash", "qwen-2.5"],
-  "agreement_ratio": 0.94
+  "cost": "$0.0008",
+  "latency": "1.4s",
+  "savings": "89% vs GPT-4o"
 }`;
 
 const CodeComparisonSection = () => {
@@ -47,13 +46,13 @@ const CodeComparisonSection = () => {
             Compare
           </span>
           <h2 className="font-heading text-5xl md:text-6xl text-foreground tracking-[-0.03em] mb-6">
-            Compare.<br />Validate.<br />Ship.
+            Route.<br />Optimize.<br />Save.
           </h2>
           <p className="text-muted-foreground text-sm leading-relaxed max-w-sm mb-8">
-            See how single-model outputs drift—and how consensus tightens the answer.
+            Manual model selection vs. automatic benchmark-based routing. Same quality, lower cost.
           </p>
           <div className="flex gap-3 flex-wrap">
-            {["Confidence score", "Model agreement", "Token overlap"].map((label) => (
+            {["Topic detection", "Value score", "Cost savings"].map((label) => (
               <span
                 key={label}
                 className="font-mono text-[10px] tracking-wide px-4 py-2 border border-border text-muted-foreground rounded-full"
@@ -94,7 +93,7 @@ const CodeComparisonSection = () => {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Single model
+              Manual (GPT-4o)
             </button>
             <button
               onClick={() => setActiveTab("consensus")}
@@ -104,7 +103,7 @@ const CodeComparisonSection = () => {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Consensus
+              Smart Routing
             </button>
           </div>
 
@@ -117,12 +116,12 @@ const CodeComparisonSection = () => {
             {activeTab === "consensus" && (
               <div className="absolute top-5 right-5 flex flex-col gap-2">
                 <div className="bg-background border border-border rounded px-3 py-1.5 text-center">
-                  <span className="font-mono text-[9px] text-muted-foreground block">Agreement</span>
-                  <span className="font-heading text-sm text-foreground">94%</span>
+                  <span className="font-mono text-[9px] text-muted-foreground block">Value Score</span>
+                  <span className="font-heading text-sm text-foreground">94</span>
                 </div>
                 <div className="bg-background border border-border rounded px-3 py-1.5 text-center">
-                  <span className="font-mono text-[9px] text-muted-foreground block">Confidence</span>
-                  <span className="font-heading text-sm text-foreground">0.94</span>
+                  <span className="font-mono text-[9px] text-muted-foreground block">Savings</span>
+                  <span className="font-heading text-sm text-foreground">89%</span>
                 </div>
               </div>
             )}
@@ -138,12 +137,12 @@ const CodeComparisonSection = () => {
             >
               <div className="flex items-center justify-between mb-3">
                 <span className="font-mono text-[9px] tracking-[0.2em] text-muted-foreground uppercase">
-                  Key Differences
+                  Routing Details
                 </span>
-                <span className="font-mono text-[10px] text-foreground">Council verified</span>
+                <span className="font-mono text-[10px] text-foreground">Benchmark verified</span>
               </div>
               <div className="space-y-1.5">
-                {["Agreement ratio: 94%", "Semantic overlap: 91%", "Council size: 3 models"].map((item) => (
+                {["Topic: code/security", "Quality score: 82/100", "Selected: DeepSeek V3.2"].map((item) => (
                   <div key={item} className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-foreground" />
                     <span className="font-mono text-[11px] text-muted-foreground">{item}</span>

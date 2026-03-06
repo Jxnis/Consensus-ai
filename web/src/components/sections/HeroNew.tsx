@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 
-const words = ["Multiple", "Models.", "One", "Consensus."];
+const words = ["Route", "smarter.", "Benchmark", "verified."];
 
 const HeroNew = () => {
   return (
@@ -26,8 +26,8 @@ const HeroNew = () => {
           className="mt-16 pt-8 border-t border-border flex flex-col md:flex-row justify-between items-start md:items-end gap-8"
         >
           <p className="font-mono text-[11px] leading-relaxed text-muted-foreground max-w-md tracking-wide">
-            A council of AI models cross-checks every answer for higher confidence.
-            Multi-model verification at a fraction of single-model frontier cost.
+            Auto-route any prompt to the best AI model based on real benchmark scores.
+            Topic detection across 24 categories. Daily updates from HuggingFace, LiveBench, GPQA.
           </p>
 
           <div className="flex items-center gap-4">

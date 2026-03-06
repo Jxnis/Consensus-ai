@@ -107,7 +107,7 @@ export default function DocsPage() {
               <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-[0.2em] block">Documentation</span>
               <h1 className="font-heading text-4xl lg:text-5xl text-foreground tracking-tight">CouncilRouter Docs</h1>
               <p className="text-muted-foreground leading-relaxed max-w-2xl text-lg">
-                A multi-model consensus router. Query multiple LLMs in parallel, compare their answers, and return the majority-agreed response — through a single, OpenAI-compatible API endpoint.
+                Benchmark-verified LLM router. Automatically route any prompt to the best AI model based on real benchmark scores from HuggingFace, LiveBench, and GPQA. Smart routing (default) or council mode (multi-model consensus) — through a single, OpenAI-compatible API endpoint.
               </p>
               <div className="flex gap-4 pt-4">
                 <button 
@@ -209,6 +209,13 @@ main();`}
                    <p className="text-muted-foreground">
                      Full endpoint reference is being finalized. Core endpoint today: <code className="text-xs bg-muted px-2 py-1 rounded">POST /v1/chat/completions</code>.
                    </p>
+                   {/* TODO: Add comprehensive API docs covering:
+                       - Smart routing parameters (budget, mode)
+                       - GET /v1/models/scores endpoint
+                       - Response header documentation (X-CouncilRouter-*)
+                       - Council mode request/response examples
+                       - Streaming SSE format details
+                       See PHASE4_SMART_ROUTING.md P4.24 for full spec */}
                 </div>
 
             </section>

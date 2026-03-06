@@ -8,8 +8,8 @@ const plans = [
     price: "$0",
     period: "/ forever",
     features: [
-      "3 open-source models",
-      "Consensus verification",
+      "Smart routing (free models)",
+      "24 topic categories",
       "20 requests / hour",
       "No API key required",
       "Community Discord",
@@ -23,8 +23,8 @@ const plans = [
     price: "$0.001–$0.005",
     period: "/ request",
     features: [
-      "3–5 smart models",
-      "Chairman synthesis",
+      "200+ models tracked",
+      "Council mode available",
       "1,000 req / hour",
       "Variable pricing by complexity",
       "x402 micropayments (USDC)",
