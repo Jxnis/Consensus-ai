@@ -18,13 +18,16 @@
 	//     "bucket_name": "my-bucket"
 	//   }
 	// ],
-	// "d1_databases": [
-	//   {
-	//     "binding": "MY_DB",
-	//     "database_name": "my-database",
-	//     "database_id": ""
-	//   }
-	// ],
+	"d1_databases": [
+		{
+			"binding": "SCORE_DB",
+			"database_name": "score-db",
+			"database_id": "7cc0c193-2223-4d2d-8bd7-db41525e2e07"
+		}
+	],
+	"triggers": {
+		"crons": ["0 6 * * *"]
+	},
 	// "ai": {
 	//   "binding": "AI"
 	// },

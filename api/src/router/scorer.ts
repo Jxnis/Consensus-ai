@@ -54,49 +54,162 @@ export function scorePrompt(prompt: string): ComplexityScore {
 }
 
 /**
- * TASK-2: Topic Detection for Smart Routing (mode=default)
+ * TASK-P4.8: Granular Topic Detection for Smart Routing
+ * Two-pass detection: top-level category first, then subcategory refinement
  */
-export type TopicCategory = 'code' | 'math' | 'science' | 'writing' | 'general';
+export type TopicCategory =
+  | 'code' | 'code/frontend' | 'code/backend' | 'code/algorithms'
+  | 'code/devops' | 'code/security' | 'code/debugging'
+  | 'math' | 'math/calculus' | 'math/algebra' | 'math/statistics' | 'math/discrete'
+  | 'science' | 'science/physics' | 'science/chemistry' | 'science/biology' | 'science/medicine'
+  | 'writing' | 'writing/creative' | 'writing/technical' | 'writing/business' | 'writing/academic'
+  | 'general' | 'reasoning';
 
-export function detectTopic(prompt: string): TopicCategory {
-  // Score each category with weighted keyword matches
-  const scores: Record<TopicCategory, number> = {
-    code: 0, math: 0, science: 0, writing: 0, general: 0
-  };
+export interface TopicDetectionResult {
+  primary: string;     // Top-level category: 'code', 'math', etc.
+  secondary?: string;  // Subcategory: 'code/security', 'math/calculus', etc.
+  confidence: number;  // 0-1, based on marker matches
+}
 
-  // CODE markers
-  const codeMarkers = [
+// Top-level category markers
+const TOP_LEVEL_MARKERS = {
+  code: [
     /\b(function|class|def|import|const|let|var|async|await|return)\b/i,
-    /\b(implement|debug|refactor|compile|runtime|typescript|python|javascript|react|API|endpoint|SQL|query|database)\b/i,
+    /\b(implement|debug|refactor|compile|runtime|typescript|python|javascript|react|vue|angular)\b/i,
+    /\b(API|endpoint|SQL|query|database|server|frontend|backend)\b/i,
     /[{}\[\]();]/, // brackets/semicolons suggest code
     /```/, // markdown code blocks
-  ];
-
-  // MATH markers
-  const mathMarkers = [
+  ],
+  math: [
     /\b(calculate|compute|solve|equation|integral|derivative|probability|statistical|algebra|proof|theorem)\b/i,
-    /\b(matrix|vector|eigenvalue|polynomial|logarithm|factorial)\b/i,
+    /\b(matrix|vector|eigenvalue|polynomial|logarithm|factorial|limit)\b/i,
     /[=+\-*/^].*\d/, // math operators with numbers
-  ];
-
-  // SCIENCE markers
-  const scienceMarkers = [
+  ],
+  science: [
     /\b(molecule|enzyme|protein|phenotype|genome|quantum|electron|photon|thermodynamic|reaction|catalyst|spectroscopy)\b/i,
-    /\b(hypothesis|experiment|observation|empirical|physics|chemistry|biology|neuroscience)\b/i,
-  ];
-
-  // WRITING markers
-  const writingMarkers = [
+    /\b(hypothesis|experiment|observation|empirical|physics|chemistry|biology|neuroscience|clinical|pharmacology)\b/i,
+  ],
+  writing: [
     /\b(write|essay|article|blog|summarize|paraphrase|rewrite|translate|creative|story|poem|email|letter)\b/i,
-    /\b(tone|style|persuasive|narrative|draft|edit|proofread)\b/i,
-  ];
+    /\b(tone|style|persuasive|narrative|draft|edit|proofread|proposal|report)\b/i,
+  ],
+  reasoning: [
+    /\b(logic|puzzle|deduce|infer|strategy|plan|optimize|multi-step|reasoning)\b/i,
+    /\b(if.*then|premise|conclusion|argument|fallacy)\b/i,
+  ],
+};
 
-  codeMarkers.forEach(m => { if (m.test(prompt)) scores.code += 10; });
-  mathMarkers.forEach(m => { if (m.test(prompt)) scores.math += 10; });
-  scienceMarkers.forEach(m => { if (m.test(prompt)) scores.science += 10; });
-  writingMarkers.forEach(m => { if (m.test(prompt)) scores.writing += 10; });
+// Subcategory markers (only checked if top-level confidence is high)
+const SUBCATEGORY_MARKERS = {
+  'code/frontend': [/react/i, /vue/i, /angular/i, /css/i, /html/i, /dom/i, /component/i, /\bui\b/i, /layout/i, /responsive/i, /tailwind/i, /next\.?js/i],
+  'code/backend': [/api/i, /server/i, /database/i, /rest/i, /graphql/i, /middleware/i, /endpoint/i, /express/i, /django/i, /flask/i, /node/i],
+  'code/algorithms': [/sort/i, /search/i, /tree/i, /graph/i, /dynamic programming/i, /big-?o/i, /complexity/i, /linked list/i, /recursion/i],
+  'code/devops': [/docker/i, /kubernetes/i, /ci.?cd/i, /deploy/i, /terraform/i, /pipeline/i, /container/i, /cloudflare/i, /aws/i, /gcp/i],
+  'code/security': [/auth/i, /encrypt/i, /vulnerab/i, /xss/i, /sql injection/i, /csrf/i, /oauth/i, /jwt/i, /password/i, /secure/i],
+  'code/debugging': [/error/i, /bug/i, /stack trace/i, /debug/i, /crash/i, /undefined/i, /\bnull\b/i, /exception/i, /fix/i],
 
-  // Find highest scoring category (default to 'general')
-  const best = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
-  return (best[1] > 0 ? best[0] : 'general') as TopicCategory;
+  'math/calculus': [/integral/i, /derivative/i, /limit/i, /differentiat/i, /taylor/i, /series/i],
+  'math/algebra': [/equation/i, /linear algebra/i, /matrix/i, /eigenvalue/i, /polynomial/i, /quadratic/i],
+  'math/statistics': [/probability/i, /distribution/i, /hypothesis/i, /p-value/i, /regression/i, /mean/i, /variance/i, /standard deviation/i],
+  'math/discrete': [/combinatorics/i, /permutation/i, /graph theory/i, /set theory/i, /boolean/i, /proof/i],
+
+  'science/physics': [/mechanics/i, /quantum/i, /thermodynamic/i, /electromagnetism/i, /relativity/i, /force/i, /energy/i, /momentum/i],
+  'science/chemistry': [/reaction/i, /molecular/i, /organic/i, /inorganic/i, /bond/i, /catalyst/i, /synthesis/i, /compound/i],
+  'science/biology': [/genetics/i, /cell/i, /ecology/i, /evolution/i, /dna/i, /rna/i, /protein/i, /organism/i],
+  'science/medicine': [/clinical/i, /pharmacology/i, /diagnostic/i, /patient/i, /treatment/i, /disease/i, /symptom/i, /drug/i],
+
+  'writing/creative': [/story/i, /poem/i, /narrative/i, /fiction/i, /character/i, /plot/i, /creative/i],
+  'writing/technical': [/documentation/i, /manual/i, /api reference/i, /tutorial/i, /technical/i, /specification/i],
+  'writing/business': [/email/i, /proposal/i, /report/i, /meeting/i, /professional/i, /corporate/i],
+  'writing/academic': [/paper/i, /citation/i, /abstract/i, /research/i, /thesis/i, /journal/i, /scholarly/i],
+};
+
+/**
+ * Detect topic category with two-pass approach
+ * Pass 1: Detect top-level category (code, math, science, writing, general, reasoning)
+ * Pass 2: If high confidence, detect subcategory (code/security, math/calculus, etc.)
+ */
+export function detectTopic(prompt: string): TopicCategory {
+  const result = detectTopicDetailed(prompt);
+  return (result.secondary || result.primary) as TopicCategory;
+}
+
+/**
+ * Detailed topic detection with confidence scores
+ * Returns both primary and secondary categories
+ */
+export function detectTopicDetailed(prompt: string): TopicDetectionResult {
+  // Pass 1: Detect top-level category
+  const topLevelScores: Record<string, number> = {
+    code: 0,
+    math: 0,
+    science: 0,
+    writing: 0,
+    reasoning: 0,
+    general: 0,
+  };
+
+  for (const [category, markers] of Object.entries(TOP_LEVEL_MARKERS)) {
+    for (const marker of markers) {
+      if (marker.test(prompt)) {
+        topLevelScores[category] += 10;
+      }
+    }
+  }
+
+  // Find best top-level category
+  const sortedTopLevel = Object.entries(topLevelScores).sort((a, b) => b[1] - a[1]);
+  const [primaryCategory, primaryScore] = sortedTopLevel[0];
+
+  // If no clear category detected, return 'general'
+  if (primaryScore === 0) {
+    return {
+      primary: 'general',
+      confidence: 0,
+    };
+  }
+
+  // Calculate confidence (0-1 scale, saturates at score=50)
+  const confidence = Math.min(primaryScore / 50, 1.0);
+
+  // Pass 2: If confidence is high enough, try subcategory detection
+  if (confidence >= 0.4) {
+    // Only check subcategories for this primary category
+    const subcategoryPrefix = `${primaryCategory}/`;
+    let bestSubcategory: string | null = null;
+    let bestSubcategoryScore = 0;
+
+    for (const [subcategory, markers] of Object.entries(SUBCATEGORY_MARKERS)) {
+      if (!subcategory.startsWith(subcategoryPrefix)) {
+        continue;
+      }
+
+      let score = 0;
+      for (const marker of markers) {
+        if (marker.test(prompt)) {
+          score += 10;
+        }
+      }
+
+      if (score > bestSubcategoryScore) {
+        bestSubcategoryScore = score;
+        bestSubcategory = subcategory;
+      }
+    }
+
+    // Use subcategory if we have at least one match
+    if (bestSubcategory && bestSubcategoryScore > 0) {
+      return {
+        primary: primaryCategory,
+        secondary: bestSubcategory,
+        confidence,
+      };
+    }
+  }
+
+  // Return top-level category only
+  return {
+    primary: primaryCategory,
+    confidence,
+  };
 }

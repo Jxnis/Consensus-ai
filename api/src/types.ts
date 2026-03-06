@@ -63,4 +63,5 @@ export interface CloudflareBindings {
   ADMIN_TOKEN: string;
   X402_WALLET_ADDRESS: string;
   CONSENSUS_CACHE: KVNamespace;
+  SCORE_DB: D1Database;
 }

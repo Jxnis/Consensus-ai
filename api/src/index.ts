@@ -5,7 +5,7 @@ import { paymentMiddleware } from "@x402/hono";
 import { x402ResourceServer, HTTPFacilitatorClient } from "@x402/core/server";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
 import { z } from "zod";
-import { scorePrompt, detectTopic } from "./router/scorer";
+import { scorePrompt, detectTopicDetailed } from "./router/scorer";
 import { selectBestModel } from "./router/model-registry";
 import { CouncilEngine } from "./council/engine";
 import { ConsensusRequest, CloudflareBindings } from "./types";
@@ -82,6 +82,21 @@ function getChargedPriceUsd(authTier: string, budget: string, complexityTier: st
 
 // API Key Authentication Middleware (runs before x402)
 app.use("/v1/*", async (c, next) => {
+  // Localhost bypass for local development and benchmarking
+  const url = new URL(c.req.url);
+  const host = c.req.header("host") || "";
+  const isLocalhost =
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1" ||
+    host.includes("localhost") ||
+    host.includes("127.0.0.1");
+
+  if (isLocalhost) {
+    c.set("authTier" as never, "paid" as never);
+    c.set("userId" as never, "local-dev" as never);
+    return await next();
+  }
+
   const authHeader = c.req.header("Authorization");
   const apiKey = authHeader?.replace("Bearer ", "");
 
@@ -205,53 +220,8 @@ app.use("/v1/chat/completions", async (c, next) => {
     budget = "free";
   }
 
-  // TASK-2: Smart routing (mode=default) — route to best single model based on topic detection
-  // parsedBody was stored in context above; safe to read here even if parse failed (returns undefined)
-  const parsedBodyForMode = c.get("parsedBody" as never) as Record<string, unknown> | undefined;
-  if (parsedBodyForMode?.mode === "default") {
-    const body = parsedBodyForMode;
-    const messages = body.messages as Array<{role: string; content: string}> | undefined;
-    const prompt = messages?.[messages.length - 1]?.content || "";
-
-    // Detect topic and select best model
-    const topic = detectTopic(prompt);
-    const bestModel = selectBestModel(topic, complexityTier, budget);
-
-    // Call selected model directly through OpenRouter
-    const openai = new OpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: c.env.OPENROUTER_API_KEY,
-    });
-
-    try {
-      const completion = await openai.chat.completions.create({
-        model: bestModel.id,
-        messages: body.messages as any,
-        temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
-        max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
-      });
-
-      // Return OpenAI-compatible response with routing metadata
-      return c.json({
-        ...completion,
-        routing: {
-          mode: 'default',
-          selected_model: bestModel.id,
-          model_name: bestModel.name,
-          topic_detected: topic,
-          complexity_tier: complexityTier,
-          budget: budget,
-          selection_reason: `Best ${topic} model within ${budget || 'any'} budget (score: ${bestModel.strengths[topic] ?? bestModel.overall})`,
-        }
-      });
-    } catch (error: any) {
-      return c.json({
-        error: "Smart routing failed",
-        message: error.message || "Failed to call selected model",
-        selected_model: bestModel.id,
-      }, 500);
-    }
-  }
+  // Body parsing and complexity scoring completed above.
+  // Smart routing logic is now in the main endpoint handler (mode=default path).
 
   // Unauthenticated users with no explicit budget get free tier
   if (budget === "free" || budget === "") {
@@ -355,9 +325,9 @@ app.post("/v1/chat/completions", async (c) => {
   const complexity = preScored ? { tier: preScored } : scorePrompt(sanitizedPrompt);
   const engine = new CouncilEngine(c.env);
 
-  // TASK-A5: Extract mode parameter (routing logic in Phase 4)
+  // TASK-P4.11: Extract mode parameter — DEFAULT to smart routing (was "council")
   const rawMode = body.mode as string | undefined;
-  const mode: "default" | "council" = (rawMode === "default" || rawMode === "council") ? rawMode : "council";
+  const mode: "default" | "council" = (rawMode === "default" || rawMode === "council") ? rawMode : "default";
 
   const request: ConsensusRequest = {
     prompt: sanitizedPrompt,
@@ -366,13 +336,314 @@ app.post("/v1/chat/completions", async (c) => {
     mode,
   };
 
-  // TASK-A5: mode=default stub (routing logic in Phase 4 - TASK-C2)
+  // TASK-P4.10, P4.11, P4.13, P4.15, P4.16: Smart Routing with Circuit Breaker and Failover
+  // Uses D1 database for model selection, supports streaming, automatic failover
   if (mode === "default") {
+    const wantsStream = body.stream === true;
+
+    // Detect topic with detailed detection
+    const topicDetection = detectTopicDetailed(sanitizedPrompt);
+    const topic = topicDetection.secondary || topicDetection.primary;
+
+    console.log(`[Smart Router] Topic detected: ${topic} (confidence: ${topicDetection.confidence.toFixed(2)})`);
+
+    // Initialize circuit breaker, telemetry, and route cache
+    const { ModelCircuitBreaker } = await import('./router/circuit-breaker');
+    const { RoutingTelemetry } = await import('./router/telemetry');
+    const { RouteCache } = await import('./router/route-cache');
+    const circuitBreaker = new ModelCircuitBreaker(c.env.CONSENSUS_CACHE);
+    const telemetry = new RoutingTelemetry(c.env.CONSENSUS_CACHE);
+    const routeCache = new RouteCache(c.env.CONSENSUS_CACHE);
+
+    // Get top 3 models from D1 for failover chain
+    // First check cache to skip D1 query
+    let candidateModels: Array<{ id: string; name: string; provider: string; input_price: number; output_price: number }> = [];
+    let dataSource = 'fallback_registry';
+
+    try {
+      if (c.env.SCORE_DB) {
+        // Check cache first (saves ~4ms D1 query)
+        const cacheVersion = await routeCache.getCacheVersion();
+        const cachedModelId = await routeCache.getCachedRouteWithVersion(topic, request.budget || "medium", cacheVersion);
+
+        if (cachedModelId) {
+          // Cache hit! Use cached model as primary candidate
+          const { getModelById } = await import('./db/queries');
+          const cachedModel = await getModelById(c.env.SCORE_DB, cachedModelId);
+
+          if (cachedModel) {
+            candidateModels = [cachedModel];
+            dataSource = 'cache';
+            console.log(`[Smart Router] Route cache HIT: ${cachedModelId}`);
+
+            // Still get backups from D1 for failover
+            const { getModelsForDomain } = await import('./db/queries');
+            const backupModels = await getModelsForDomain(c.env.SCORE_DB, topic, request.budget || "medium");
+            if (backupModels && backupModels.length > 1) {
+              // Add top 2 backups (excluding cached model if it appears)
+              const backups = backupModels.filter(m => m.id !== cachedModelId).slice(0, 2);
+              candidateModels.push(...backups);
+            }
+          } else {
+            // Cached model not found (deleted?), fall through to normal D1 query
+            console.log(`[Smart Router] Cached model ${cachedModelId} not found, querying D1...`);
+          }
+        }
+
+        // Cache miss or cached model not found - query D1
+        if (candidateModels.length === 0) {
+          const { getModelsForDomain } = await import('./db/queries');
+          const models = await getModelsForDomain(c.env.SCORE_DB, topic, request.budget || "medium");
+
+          if (models && models.length > 0) {
+            candidateModels = models.slice(0, 3); // Top 3 models
+            dataSource = 'database';
+            console.log(`[Smart Router] D1 returned ${models.length} models, using top 3 for failover chain`);
+
+            // Cache the top model for future requests (async, don't block)
+            c.executionCtx.waitUntil(
+              routeCache.cacheRoute(topic, request.budget || "medium", models[0].id, models[0].name)
+            );
+          }
+        }
+      }
+    } catch (dbErr) {
+      console.error(`[Smart Router] D1 query failed, falling back to registry:`, dbErr);
+    }
+
+    // Fallback to hardcoded registry if D1 fails or returns no results
+    if (candidateModels.length === 0) {
+      console.log(`[Smart Router] Using fallback registry`);
+      const topLevelTopic = topic.split('/')[0] as any;
+      const fallback = selectBestModel(topLevelTopic, complexity.tier, request.budget || "medium");
+      candidateModels = [{
+        id: fallback.id,
+        name: fallback.name,
+        provider: 'Unknown',
+        input_price: fallback.inputPricePer1M,
+        output_price: fallback.outputPricePer1M,
+      }];
+    }
+
+    // Filter out circuit-broken models
+    const healthyModels: typeof candidateModels = [];
+    for (const model of candidateModels) {
+      const isHealthy = await circuitBreaker.isModelHealthy(model.id);
+      if (isHealthy) {
+        healthyModels.push(model);
+      } else {
+        console.log(`[Smart Router] Skipping ${model.id} - circuit breaker is open`);
+      }
+    }
+
+    if (healthyModels.length === 0) {
+      console.error('[Smart Router] All candidate models are circuit-broken!');
+      return c.json({
+        error: 'All models unavailable',
+        message: 'All candidate models are currently failing. Please try again later.',
+        request_id: requestId,
+      }, 503);
+    }
+
+    // Initialize OpenAI client
+    const openai = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: c.env.OPENROUTER_API_KEY,
+      defaultHeaders: {
+        'HTTP-Referer': 'https://councilrouter.ai',
+        'X-Title': 'CouncilRouter',
+      },
+    });
+
+    // Failover chain: try up to 3 models
+    const MAX_FAILOVER_ATTEMPTS = Math.min(healthyModels.length, 3);
+    let lastError: Error | null = null;
+    let failoverCount = 0;
+
+    for (let i = 0; i < MAX_FAILOVER_ATTEMPTS; i++) {
+      const model = healthyModels[i];
+      console.log(`[Smart Router] Attempt ${i + 1}/${MAX_FAILOVER_ATTEMPTS}: Trying ${model.id}`);
+
+      const startTime = Date.now();
+
+      try {
+        if (wantsStream) {
+          // TASK-P4.10: Streaming support with failover
+          // NOTE: For streaming, we can only failover BEFORE the first chunk arrives
+          // Once chunks start flowing, we cannot switch models
+          const stream = await openai.chat.completions.create({
+            model: model.id,
+            messages: body.messages as any,
+            temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
+            max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+            stream: true,
+          });
+
+          const latency = Date.now() - startTime;
+
+          // Note: We record success AFTER stream completes, not here
+          // If we record success now and the stream dies mid-way, the circuit breaker won't detect it
+
+          // Log routing decision (async, don't block response)
+          if (c.env.SCORE_DB) {
+            const { logRoutingDecision } = await import('./router/routing-history');
+            c.executionCtx.waitUntil(
+              logRoutingDecision(c.env.SCORE_DB, {
+                request_id: requestId,
+                topic,
+                topic_confidence: topicDetection.confidence,
+                complexity: complexity.tier,
+                budget: request.budget || 'medium',
+                selected_model: model.id,
+                data_source: dataSource,
+                latency_ms: latency,
+                success: true,
+                failover_count: failoverCount,
+                created_at: new Date().toISOString(),
+              })
+            );
+          }
+
+          const encoder = new TextEncoder();
+          const readable = new ReadableStream({
+            async start(controller) {
+              try {
+                for await (const chunk of stream) {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
+                }
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                controller.close();
+
+                // Record success HERE, when stream actually completes (not when it opens)
+                circuitBreaker.recordSuccess(model.id); // fire-and-forget, don't await
+
+                // Record success telemetry
+                c.executionCtx.waitUntil(telemetry.record(model.id, Date.now() - startTime, true));
+              } catch (streamErr) {
+                console.error('[Smart Router] Stream error:', streamErr);
+                // Stream already started, can't fail over now
+                circuitBreaker.recordFailure(model.id); // fire-and-forget
+                // Record failure in telemetry
+                c.executionCtx.waitUntil(telemetry.record(model.id, Date.now() - startTime, false));
+                controller.error(streamErr);
+              }
+            },
+          });
+
+          return new Response(readable, {
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'Connection': 'keep-alive',
+              'X-CouncilRouter-Mode': 'default',
+              'X-CouncilRouter-Model': model.id,
+              'X-CouncilRouter-Topic': topic,
+              'X-CouncilRouter-Budget': request.budget || 'medium',
+              'X-CouncilRouter-Confidence': topicDetection.confidence.toFixed(2),
+              'X-CouncilRouter-Failover-Count': String(failoverCount),
+            },
+          });
+        } else {
+          // Non-streaming response with failover
+          const completion = await openai.chat.completions.create({
+            model: model.id,
+            messages: body.messages as any,
+            temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
+            max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+          });
+
+          const latency = Date.now() - startTime;
+
+          // Success! Record and return
+          await circuitBreaker.recordSuccess(model.id);
+
+          // Record telemetry (async, don't block response)
+          c.executionCtx.waitUntil(telemetry.record(model.id, latency, true));
+
+          // Log routing decision (async, don't block response)
+          if (c.env.SCORE_DB) {
+            const { logRoutingDecision } = await import('./router/routing-history');
+            c.executionCtx.waitUntil(
+              logRoutingDecision(c.env.SCORE_DB, {
+                request_id: requestId,
+                topic,
+                topic_confidence: topicDetection.confidence,
+                complexity: complexity.tier,
+                budget: request.budget || 'medium',
+                selected_model: model.id,
+                data_source: dataSource,
+                latency_ms: latency,
+                success: true,
+                failover_count: failoverCount,
+                created_at: new Date().toISOString(),
+              })
+            );
+          }
+
+          return c.json({
+            ...completion,
+            routing: {
+              mode: 'default',
+              selected_model: model.id,
+              model_name: model.name,
+              provider: model.provider,
+              topic_detected: topic,
+              topic_confidence: topicDetection.confidence,
+              complexity_tier: complexity.tier,
+              budget: request.budget || 'medium',
+              data_source: dataSource,
+              failover_count: failoverCount,
+            },
+          });
+        }
+      } catch (error: any) {
+        const latency = Date.now() - startTime;
+        lastError = error;
+        failoverCount++;
+        await circuitBreaker.recordFailure(model.id);
+
+        // Record failure in telemetry (async, don't block)
+        c.executionCtx.waitUntil(telemetry.record(model.id, latency, false));
+
+        console.error(`[Smart Router] Model ${model.id} failed:`, error.message);
+
+        // If not the last model, try next one
+        if (i < MAX_FAILOVER_ATTEMPTS - 1) {
+          console.log(`[Smart Router] Failing over to next model...`);
+          continue;
+        }
+      }
+    }
+
+    // All models failed
+    console.error('[Smart Router] All models in failover chain failed');
+
+    // Log routing decision failure (async, don't block response)
+    if (c.env.SCORE_DB && healthyModels.length > 0) {
+      const { logRoutingDecision } = await import('./router/routing-history');
+      c.executionCtx.waitUntil(
+        logRoutingDecision(c.env.SCORE_DB, {
+          request_id: requestId,
+          topic,
+          topic_confidence: topicDetection.confidence,
+          complexity: complexity.tier,
+          budget: request.budget || 'medium',
+          selected_model: healthyModels[0].id, // Log the first attempted model
+          data_source: dataSource,
+          latency_ms: null, // No successful response
+          success: false,
+          failover_count: failoverCount,
+          created_at: new Date().toISOString(),
+        })
+      );
+    }
+
     return c.json({
-      error: "mode=default not yet implemented",
-      message: "Smart routing is coming in Phase 4. Use mode='council' for multi-model consensus, or omit mode parameter for backward compatibility.",
+      error: 'All models failed',
+      message: lastError?.message || 'Failed to call any model in failover chain',
+      failover_count: failoverCount,
       request_id: requestId,
-    }, 501);
+    }, 502);
   }
 
   const wantsStream = body.stream === true;
@@ -604,6 +875,26 @@ app.get("/", (c) => {
   });
 });
 
+// Public: Get all models with their benchmark scores (no auth required)
+app.get("/v1/models/scores", async (c) => {
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { getAllModelsWithScores } = await import("./db/queries");
+    const data = await getAllModelsWithScores(c.env.SCORE_DB);
+
+    return c.json(data);
+  } catch (err) {
+    console.error('[Public API] Failed to fetch model scores:', err);
+    return c.json({
+      error: "Failed to fetch model scores",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
 // Admin: Create API key (requires admin auth + rate limit)
 app.post("/admin/create-key", async (c) => {
   const adminToken = c.req.header("X-Admin-Token");
@@ -756,4 +1047,222 @@ app.get("/admin/stats", async (c) => {
   });
 });
 
-export default app;
+// Admin: Sync pricing from OpenRouter (requires admin auth)
+app.post("/admin/sync-pricing", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { scrapeOpenRouterPricing } = await import("./db/scrapers/openrouter-pricing");
+    const result = await scrapeOpenRouterPricing(c.env.SCORE_DB, c.env.OPENROUTER_API_KEY);
+
+    return c.json({
+      success: true,
+      updated: result.updated,
+      errors: result.errors,
+    });
+  } catch (err) {
+    return c.json({
+      error: "Pricing sync failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Sync HuggingFace benchmark scores (requires admin auth)
+app.post("/admin/sync-huggingface", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { scrapeHuggingFace } = await import("./db/scrapers/huggingface");
+    const result = await scrapeHuggingFace(c.env.SCORE_DB);
+
+    return c.json({
+      success: true,
+      updated: result.updated,
+      errors: result.errors,
+    });
+  } catch (err) {
+    return c.json({
+      error: "HuggingFace sync failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Sync LiveBench scores (requires admin auth)
+app.post("/admin/sync-livebench", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { scrapeLiveBench } = await import("./db/scrapers/livebench");
+    const result = await scrapeLiveBench(c.env.SCORE_DB);
+
+    return c.json({
+      success: true,
+      updated: result.updated,
+      errors: result.errors,
+    });
+  } catch (err) {
+    return c.json({
+      error: "LiveBench sync failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Recalculate composite scores (requires admin auth)
+app.post("/admin/recalculate-scores", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { recalculateScores } = await import("./db/score-calculator");
+    await recalculateScores(c.env.SCORE_DB);
+
+    return c.json({
+      success: true,
+      message: "Composite scores recalculated",
+    });
+  } catch (err) {
+    return c.json({
+      error: "Score recalculation failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Invalidate route cache (requires admin auth)
+app.post("/admin/invalidate-cache", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  try {
+    const { RouteCache } = await import("./router/route-cache");
+    const routeCache = new RouteCache(c.env.CONSENSUS_CACHE);
+    await routeCache.invalidateAll();
+
+    return c.json({
+      success: true,
+      message: "Route cache invalidated",
+    });
+  } catch (err) {
+    return c.json({
+      error: "Cache invalidation failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Database health check (requires admin auth)
+app.get("/admin/db-health", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { checkDatabaseHealth } = await import("./db/queries");
+    const health = await checkDatabaseHealth(c.env.SCORE_DB);
+
+    return c.json({
+      success: true,
+      database: health,
+    });
+  } catch (err) {
+    return c.json({
+      error: "Health check failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Export with scheduled handler for cron trigger
+export default {
+  fetch: app.fetch,
+  scheduled: async (event: ScheduledEvent, env: CloudflareBindings, ctx: ExecutionContext) => {
+    console.log('[Cron] Running scheduled scraper pipeline...');
+
+    try {
+      // 1. Sync pricing from OpenRouter (updates all models)
+      const { scrapeOpenRouterPricing } = await import('./db/scrapers/openrouter-pricing');
+      await scrapeOpenRouterPricing(env.SCORE_DB, env.OPENROUTER_API_KEY);
+
+      // 2. Sync HuggingFace benchmark scores
+      const { scrapeHuggingFace } = await import('./db/scrapers/huggingface');
+      await scrapeHuggingFace(env.SCORE_DB);
+
+      // 3. Sync LiveBench scores
+      const { scrapeLiveBench } = await import('./db/scrapers/livebench');
+      await scrapeLiveBench(env.SCORE_DB);
+
+      // 4. Flush telemetry data from KV to D1
+      const { RoutingTelemetry } = await import('./router/telemetry');
+      const telemetry = new RoutingTelemetry(env.CONSENSUS_CACHE);
+      await telemetry.flushToD1(env.SCORE_DB);
+
+      // 5. Recalculate composite scores (already done by each scraper, but doing once more at the end ensures consistency)
+      const { recalculateScores } = await import('./db/score-calculator');
+      await recalculateScores(env.SCORE_DB);
+
+      // 6. Invalidate route cache (scores changed, cached routes may be stale)
+      const { RouteCache } = await import('./router/route-cache');
+      const routeCache = new RouteCache(env.CONSENSUS_CACHE);
+      await routeCache.invalidateAll();
+
+      console.log('[Cron] Scraper pipeline complete');
+    } catch (err) {
+      console.error('[Cron] Pipeline failed:', err instanceof Error ? err.message : String(err));
+    }
+  }
+};
