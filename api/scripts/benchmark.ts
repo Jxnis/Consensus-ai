@@ -105,8 +105,15 @@ async function runInference(
       },
       body: JSON.stringify({
         model: 'council-router-v1',
-        messages: [{ role: 'user', content: question }],
+        messages: [
+          {
+            role: 'system',
+            content: 'Answer the following multiple choice question. The last line of your response should be of the following format: \'ANSWER: $LETTER\' (without quotes) where LETTER is one of ABCD. Think step by step before answering.'
+          },
+          { role: 'user', content: question }
+        ],
         budget: modelConfig.budget || 'free',
+        temperature: 0,
       }),
     });
 
@@ -141,7 +148,14 @@ async function runInference(
       },
       body: JSON.stringify({
         model: modelConfig.id,
-        messages: [{ role: 'user', content: question }],
+        messages: [
+          {
+            role: 'system',
+            content: 'Answer the following multiple choice question. The last line of your response should be of the following format: \'ANSWER: $LETTER\' (without quotes) where LETTER is one of ABCD. Think step by step before answering.'
+          },
+          { role: 'user', content: question }
+        ],
+        temperature: 0,
       }),
     });
 
@@ -274,34 +288,48 @@ function checkAnswer(
     return { is_correct: isCorrect, grading_method: 'code_string_match' };
   }
 
-  // TASK-31z: Multiple-choice handling (MMLU format)
-  // If ground truth is a single letter (A/B/C/D), extract the model's CHOSEN letter
-  if (/^[A-D]$/i.test(groundTruth.trim())) {
+  // TASK-31z + TASK-B5 + BUG-FIX-TruthfulQA: Multiple-choice handling (A-Z support)
+  // If ground truth is a single letter (A-D for GPQA, A-J for MMLU-Pro, up to A-Z for TruthfulQA), extract the model's CHOSEN letter
+  if (/^[A-Z]$/i.test(groundTruth.trim())) {
     const targetLetter = groundTruth.trim().toUpperCase();
-    // TASK-31-FIX-1: Robust multiple-choice letter extraction
+    // TASK-31-FIX-1 + TASK-B5 + BUG-FIX: Robust multiple-choice letter extraction (A-Z)
     // Priority-ordered patterns, tested against all known model response formats.
     // CRITICAL: These patterns must NOT match "A" from the word "answer" or
     // the English article "A" at the start of sentences.
     const extractPatterns = [
+      // 0. Standard benchmark format: "ANSWER: D" (Epoch AI evaluation format)
+      //    BUG FIX (2026-03-03): This is the PRIMARY pattern used by all published benchmarks
+      //    With the proper system prompt, models will put "ANSWER: D" on the last line
+      /\bANSWER:\s*([A-Z])\b/,
       // 1. Boxed answer (LaTeX): \boxed{B} or \boxed{\text{B}}
-      /\\boxed\{\\text\{([A-D])\}\}/i,
-      /\\boxed\{([A-D])\}/i,
+      /\\boxed\{\\text\{([A-Z])\}\}/i,
+      /\\boxed\{([A-Z])\}/i,
       // 2. "the answer is (B)" / "correct answer is B" / "answer is **B**"
       //    Key fix: match "answer is" as a PHRASE, so "A" in "answer" is never captured
-      /\banswer\s+is\s*:?\s*\*{0,2}\(?([A-D])\)?\*{0,2}\b/i,
+      //    BUG FIX (2026-03-03): Added \s* after \*{0,2} to handle "answer is ** B" format
+      /\banswer\s+is\s*:?\s*\*{0,2}\s*\(?([A-Z])\)?\*{0,2}\b/i,
       // 3. "the correct answer/option/choice is (B)"
-      /\bcorrect\s+(?:answer|option|choice)\s+is\s*:?\s*\*{0,2}\(?([A-D])\)?\*{0,2}\b/i,
+      //    BUG FIX (2026-03-03): Added \s* after \*{0,2} to handle "correct answer is ** B" format
+      /\bcorrect\s+(?:answer|option|choice)\s+is\s*:?\s*\*{0,2}\s*\(?([A-Z])\)?\*{0,2}\b/i,
       // 4. "Answer: B" or "Answer: (B)" — colon required to avoid matching prose
-      /\b(?:answer|choice)\s*:\s*\*{0,2}\(?([A-D])\)?\*{0,2}/i,
+      //    BUG FIX (2026-03-03): Added \s* after \*{0,2} to handle "Answer:** C" format
+      /\b(?:answer|choice)\s*:\s*\*{0,2}\s*\(?([A-Z])\)?\*{0,2}/i,
       // 5. Letter in parentheses: (B) or **(B)** — very reliable signal
-      /\*{0,2}\(([A-D])\)\*{0,2}/,
-      // 6. Standalone letter at start of line: "B. Because..." or "B) ..."
+      //    BUG FIX (2026-03-03): Added \s* after opening \*{0,2}
+      /\*{0,2}\s*\(([A-Z])\)\*{0,2}/,
+      // 6. **B.** format (strong signal, common in model outputs like "The correct formula is **B.**")
+      //    BUG FIX (2026-03-03): Added to handle markdown-bold answers
+      /\*{1,2}\s*([A-Z])\s*\.\s*\*{0,2}/,
+      // 7. Standalone letter at start of line: "B. Because..." or "B) ..."
       //    Requires a delimiter after the letter to avoid matching articles
-      /^\s*\*{0,2}([A-D])\*{0,2}\s*[\)\.:\-,]/m,
-      // 7. Bare letter only (entire response is just "B" or "**B**" possibly with whitespace)
-      /^\s*\*{0,2}([A-D])\*{0,2}\s*$/m,
+      //    BUG FIX (2026-03-03): Added \s* after opening \*{0,2}
+      /^\s*\*{0,2}\s*([A-Z])\*{0,2}\s*[\)\.:\-,]/m,
+      // 8. Bare letter only (entire response is just "B" or "**B**" possibly with whitespace)
+      //    BUG FIX (2026-03-03): Added \s* after opening \*{0,2}
+      /^\s*\*{0,2}\s*([A-Z])\*{0,2}\s*$/m,
     ];
     let chosenLetter: string | null = null;
+
     for (const pattern of extractPatterns) {
       const match = modelAnswer.match(pattern);
       if (match) {
@@ -310,13 +338,13 @@ function checkAnswer(
       }
     }
 
-    // TASK-31-FIX-8: Option-text fallback when letter extraction fails
+    // TASK-31-FIX-8 + TASK-B5 + BUG-FIX: Option-text fallback when letter extraction fails (A-Z support)
     // If model says "the answer is hydrogen" instead of "(B)", parse question
     // to find which option text matches
     if (chosenLetter === null && question) {
-      // Parse question for option mappings: "(A) mRNA (B) tRNA (C) dRNA (D) rRNA"
+      // Parse question for option mappings: "(A) mRNA (B) tRNA (C) dRNA (D) rRNA" or A-Z for any MC format
       // Pattern: (LETTER) text until next (LETTER) or end
-      const optionRegex = /\(([A-D])\)\s*([^(]+?)(?=\s*\([A-D]\)|$)/gi;
+      const optionRegex = /\(([A-Z])\)\s*([^(]+?)(?=\s*\([A-Z]\)|$)/gi;
       const optionMap: Record<string, string> = {};
       let optMatch;
 
@@ -791,8 +819,9 @@ async function main() {
     process.exit(1);
   }
 
-  // Determine if this is a CouncilRouter model or competitor
-  const isCouncilRouter = modelName.startsWith('councilrouter_');
+  // BUG #1 FIX: Determine if this is a CouncilRouter model or competitor
+  // Check model ID, not name. All 6 council configs have id="council-router-v1"
+  const isCouncilRouter = modelConfig.id === 'council-router-v1';
 
   console.log(`\n🔬 CouncilRouter Benchmark Runner`);
   console.log(`   Dataset: ${datasetName}`);

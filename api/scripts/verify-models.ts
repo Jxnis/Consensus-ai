@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
 /**
- * TASK-A3 Step 0: Verify Model IDs
+ * Phase 2 Benchmark Model Verification (TASK-B4 Step 0)
  *
- * Checks candidate model IDs against OpenRouter's live /models endpoint.
+ * Verifies candidate model IDs for Phase 2 benchmarks against OpenRouter.
  * Models go offline frequently — don't hardcode IDs without verification.
  *
  * Usage: OPENROUTER_API_KEY=xxx npx tsx api/scripts/verify-models.ts
@@ -15,21 +15,25 @@ if (!OPENROUTER_API_KEY) {
   process.exit(1);
 }
 
-// Candidate models from NEW_DIRECTION.md TASK-A3 (IDs corrected via OpenRouter /models verification)
+// Candidate models - CORRECTED IDs from Phase 1 (already deployed in selector.ts)
+// Free tier baselines (must beat these with council_free)
 const CANDIDATE_FREE_MODELS = [
-  "meta-llama/llama-3.3-70b-instruct:free",
-  "google/gemma-3-27b-it:free",
-  "mistralai/mistral-small-3.1-24b-instruct:free",  // Note: 3.1 not 3.2
-  "qwen/qwen3-next-80b-a3b-instruct:free",          // qwen-2.5-72b:free not available, this is alternative
-  "nousresearch/hermes-3-llama-3.1-405b:free",      // Phi-4:free not available, Hermes is strong alternative
+  "meta-llama/llama-3.3-70b-instruct:free",           // Best free model overall
+  "nousresearch/hermes-3-llama-3.1-405b:free",        // 405B, strong reasoning (Phi-4 substitute)
+  "qwen/qwen3-next-80b-a3b-instruct:free",            // Strong reasoning (Qwen 2.5 72B substitute)
+  "google/gemma-3-27b-it:free",                       // Google's best free
+  "mistralai/mistral-small-3.1-24b-instruct:free",    // Good for coding (3.1 not 3.2)
 ];
 
+// Paid tier baselines - CORRECTED IDs from Phase 1 (already deployed in selector.ts)
 const CANDIDATE_PAID_MODELS = [
-  "deepseek/deepseek-chat",            // DeepSeek V3
-  "qwen/qwen-2.5-72b-instruct",        // Qwen 2.5 72B
-  "moonshotai/kimi-k2.5",              // Fixed: moonshotai not moonshot
-  "mistralai/mistral-large-2512",      // Fixed: mistral-large-2512 not mistral-large-latest
-  "z-ai/glm-5",                        // Fixed: z-ai not zhipu
+  "openai/gpt-4o-mini",                // Popular mid-tier ($0.00015/req)
+  "deepseek/deepseek-chat",            // DeepSeek V3.2 (79.9% GPQA, $0.0003/req)
+  "anthropic/claude-sonnet-4.5",       // Premium mid-tier (83.4% GPQA, $0.003/req)
+  "moonshotai/kimi-k2.5",              // Frontier-class (87.6% GPQA, $0.003/req) - moonshotai NOT moonshot
+  "z-ai/glm-5",                        // Near-frontier (86.0% GPQA, $0.001/req) - z-ai NOT zhipu
+  "qwen/qwen-2.5-72b-instruct",        // Paid version for higher limits
+  "mistralai/mistral-large-2512",      // Strong reasoning - 2512 NOT -latest
 ];
 
 interface OpenRouterModel {
@@ -60,7 +64,7 @@ async function fetchOpenRouterModels(): Promise<OpenRouterModel[]> {
 }
 
 async function main() {
-  console.log("=== TASK-A3 Step 0: Model ID Verification ===\n");
+  console.log("=== Phase 2 Benchmark Model Verification (TASK-B4 Step 0) ===\n");
 
   let liveModels: OpenRouterModel[];
   try {
@@ -125,12 +129,12 @@ async function main() {
 
   console.log("=== SUMMARY ===\n");
   if (totalOk === totalCandidates) {
-    console.log(`🟢 ALL ${totalCandidates} CANDIDATE MODELS VERIFIED\n`);
-    console.log("Safe to proceed with TASK-A3 implementation.\n");
+    console.log(`🟢 ALL ${totalCandidates} PHASE 2 CANDIDATE MODELS VERIFIED\n`);
+    console.log("Safe to proceed with TASK-B4 (add model configs to config.json).\n");
     process.exit(0);
   } else {
     console.log(`🟡 ${totalOk}/${totalCandidates} models verified, ${freeMissing + paidMissing} missing\n`);
-    console.log("⚠️  Update model IDs in NEW_DIRECTION.md before implementing TASK-A3.\n");
+    console.log("⚠️  Some models are offline or renamed. Use alternative IDs for config.json.\n");
     process.exit(1);
   }
 }
