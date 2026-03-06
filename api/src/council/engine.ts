@@ -1,8 +1,8 @@
 import OpenAI from "openai";
 import { ConsensusRequest, ConsensusResponse, ComplexityTier, ModelInfo, CloudflareBindings } from "../types";
-import { ModelCrawler } from "./crawler";
 import { CouncilSelector } from "./selector";
 import { ConsensusMatcher } from "./matcher";
+// NOTE: ModelCrawler intentionally NOT imported — we use whitelist-only selection now
 
 export class CouncilEngine {
   private openai: OpenAI;
@@ -37,21 +37,12 @@ export class CouncilEngine {
     }
     await this.incrementCounter(`metrics:${this.getUtcDayKey()}:cache_miss`);
 
-    // 1. Get model registry — merge crawled + reliable fallback models
-    let allModels: ModelInfo[];
-    try {
-      const crawledModels = await ModelCrawler.getModels(this.kv, this.apiKey);
-      // Merge: fallback models ensure reliability, crawled models add variety
-      const fallbackModels = this.getFallbackModels();
-      const crawledIds = new Set(crawledModels.map(m => m.id));
-      const uniqueFallbacks = fallbackModels.filter(m => !crawledIds.has(m.id));
-      allModels = [...crawledModels, ...uniqueFallbacks];
-    } catch (error) {
-      console.error("[CouncilEngine] OpenRouter API failed. Using fallback model list.", error);
-      allModels = this.getFallbackModels();
-    }
+    // 1. WHITELIST-ONLY model selection — NO crawler, NO dynamic discovery
+    // The crawler was pulling in 200+ models including garbage like openrouter/bodybuilder
+    // that returns JSON routing instructions instead of actual answers.
+    const allModels: ModelInfo[] = this.getWhitelistedModels();
 
-    // 2. Select council
+    // 2. Select council from whitelist
     let selectedModels = CouncilSelector.selectModels(allModels, tier, request);
 
     if (selectedModels.length === 0) {
@@ -61,52 +52,22 @@ export class CouncilEngine {
     // 2.5 Budget guardrails — downshift to cheaper models if estimated cost breaches budget policy.
     selectedModels = this.applyBudgetGuardrails(selectedModels, allModels, prompt, normalizedBudget);
 
-    // 3. Race models in parallel
+    // 3. Race models in parallel — NO Wave 2, NO backup models
+    // Every model in the council is verified to work. If one fails, we proceed with fewer.
     console.log(`[CouncilEngine] Council for "${tier}" request (${selectedModels.length} models):`);
-    selectedModels.forEach(m => console.log(`  - ${m.name} | $${m.pricePer1M.toFixed(4)}/1M`));
+    selectedModels.forEach(m => console.log(`  - ${m.name} (${m.id}) | $${m.pricePer1M.toFixed(4)}/1M`));
 
-    // Minimum 3 responses for all tiers — a "council" of 1-2 is meaningless
-    const baseTargetCount = tier === "COMPLEX" ? 4 : 3;
-    const targetCount = Math.min(baseTargetCount, selectedModels.length);
+    // Target 3 responses for all tiers
+    const targetCount = Math.min(3, selectedModels.length);
 
-    // 31-FIX-2: Prepare backup models for Wave 2 racing
-    const selectedIds = new Set(selectedModels.map(m => m.id));
-    const budgetFilter = normalizedBudget === "free"
-      ? (m: ModelInfo) => m.isFree
-      : (m: ModelInfo) => true;
-    const backupModels = allModels
-      .filter(m => !selectedIds.has(m.id) && budgetFilter(m))
-      .sort((a, b) => a.pricePer1M - b.pricePer1M)
-      .slice(0, 4);
-
-    let results = await this.raceModels(prompt, selectedModels, targetCount, tier, backupModels);
+    let results = await this.raceModels(prompt, selectedModels, targetCount, tier, []);  // NO backups
     let isDegraded = false;
 
-    // FIX-10: Enforce minimum council size — retry with emergency fallback if < 2 models responded
+    // If fewer than 2 models responded from whitelist, mark as degraded
+    // NO emergency fallback — only whitelisted models are allowed
     if (results.length < 2) {
-      console.warn(`[CouncilEngine] FIX-10: Only ${results.length} model(s) responded. Attempting emergency fallback round...`);
-
-      // Find untried models: exclude selectedModels and backupModels
-      const triedIds = new Set([
-        ...selectedModels.map(m => m.id),
-        ...backupModels.map(m => m.id)
-      ]);
-      const emergencyModels = allModels
-        .filter(m => !triedIds.has(m.id) && budgetFilter(m))
-        .sort((a, b) => a.pricePer1M - b.pricePer1M)
-        .slice(0, 3);  // Try 3 more models
-
-      if (emergencyModels.length > 0) {
-        console.log(`[CouncilEngine] FIX-10: Firing ${emergencyModels.length} emergency fallback models...`);
-        const emergencyResults = await this.raceModels(prompt, emergencyModels, 2, tier, []);
-        results = [...results, ...emergencyResults];
-      }
-
-      // Mark as degraded if still < 2
-      if (results.length < 2) {
-        isDegraded = true;
-        console.warn(`[CouncilEngine] FIX-10: Council degraded — only ${results.length} model(s) responded. Proceeding with degraded flag.`);
-      }
+      isDegraded = true;
+      console.warn(`[CouncilEngine] Council degraded — only ${results.length} model(s) responded from whitelist. No emergency fallback.`);
     }
 
     if (results.length === 0) {
@@ -410,12 +371,11 @@ export class CouncilEngine {
     const maxTokens = tier === "SIMPLE" ? 500 : tier === "MEDIUM" ? 800 : 1200;
 
     return new Promise((resolve) => {
-      let activeRequests = 0; // fireModel() increments this per call
+      let activeRequests = 0;
       let isResolved = false;
-      let wave2Fired = false;
       let minWaitElapsed = false;
 
-      // Hard timeout — resolve with whatever we have (25s to give Wave 2 time)
+      // Hard timeout — 25s max, then resolve with whatever we have
       const hardTimeout = setTimeout(() => {
         if (!isResolved) {
           console.log(`[CouncilEngine] Racing timeout after 25s. Got ${results.length}/${targetCount} results.`);
@@ -425,8 +385,7 @@ export class CouncilEngine {
         }
       }, 25000);
 
-      // 31-FIX-4: Minimum wait of 3s before resolving, even if targetCount hit early.
-      // Collects extra votes for better consensus without adding latency (most models take >3s).
+      // Minimum wait of 3s before resolving, even if targetCount hit early.
       setTimeout(() => {
         minWaitElapsed = true;
         tryResolve();
@@ -435,7 +394,7 @@ export class CouncilEngine {
       const tryResolve = () => {
         if (isResolved) return;
 
-        // Only resolve after minimum wait + enough results
+        // Resolve after minimum wait + enough results
         if (results.length >= targetCount && minWaitElapsed) {
           clearTimeout(hardTimeout);
           controller.abort();
@@ -445,8 +404,8 @@ export class CouncilEngine {
           return;
         }
 
-        // All requests finished (both waves) but below target
-        if (activeRequests === 0 && (wave2Fired || backupModels.length === 0)) {
+        // All requests finished but below target — no Wave 2, just accept what we got
+        if (activeRequests === 0) {
           clearTimeout(hardTimeout);
           isResolved = true;
           console.log(`[CouncilEngine] All models finished. Got ${results.length}/${targetCount} results.`);
@@ -484,22 +443,8 @@ export class CouncilEngine {
         });
       };
 
-      // Wave 1: Fire all selected models
+      // Wave 1: Fire all selected models (Wave 2 REMOVED — only whitelisted models)
       models.forEach(model => fireModel(model));
-
-      // FIX-9: Wave 2 — if after 4s we still don't have enough responses, fire backups
-      if (backupModels.length > 0) {
-        setTimeout(() => {
-          if (isResolved) return;
-          if (results.length < targetCount) {
-            wave2Fired = true;
-            console.log(`[CouncilEngine] Wave 2: ${results.length}/${targetCount} responses. Firing ${backupModels.length} backup models.`);
-            backupModels.forEach(model => fireModel(model));
-          } else {
-            wave2Fired = true; // Mark as done so tryResolve works
-          }
-        }, 4000);  // FIX-9: Lowered from 8s — backup models fire faster
-      }
     });
   }
 
@@ -535,32 +480,39 @@ Focus on accuracy and correctness over agreeing with the majority.`;
     await this.kv.put(key, String(count + 1), { expirationTtl: CouncilEngine.METRICS_TTL_SECONDS });
   }
 
-  // 31-FIX-5: Updated fallback models list (verified 2026-02-23 against OpenRouter /models)
-  private getFallbackModels(): ModelInfo[] {
+  /**
+   * WHITELIST-ONLY model registry.
+   * Every model here has been verified to:
+   * 1. Return actual content (not JSON routing instructions)
+   * 2. Respond within 25s
+   * 3. Follow the system prompt format
+   * 
+   * DO NOT add models without testing them first.
+   * The crawler was pulling in garbage like openrouter/bodybuilder.
+   */
+  private getWhitelistedModels(): ModelInfo[] {
     return [
-      // Reliable free models — 10 models to ensure ≥3 always respond
+      // === FREE TIER (verified working) ===
       { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B", provider: "Meta", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 131072 },
-      { id: "google/gemma-3-27b-it:free", name: "Gemma 3 27B", provider: "Google", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 131072 },
-      { id: "google/gemma-3-12b-it:free", name: "Gemma 3 12B", provider: "Google", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 32768 },
-      { id: "qwen/qwen3-4b:free", name: "Qwen3 4B", provider: "Qwen", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 32768 },
       { id: "qwen/qwen3-next-80b-a3b-instruct:free", name: "Qwen3 Next 80B", provider: "Qwen", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 262144 },
+      { id: "google/gemma-3-27b-it:free", name: "Gemma 3 27B", provider: "Google", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 131072 },
       { id: "mistralai/mistral-small-3.1-24b-instruct:free", name: "Mistral Small 3.1 24B", provider: "Mistral", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 32768 },
       { id: "deepseek/deepseek-r1-0528:free", name: "DeepSeek R1", provider: "DeepSeek", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 163840 },
-      { id: "nvidia/nemotron-nano-9b-v2:free", name: "Nemotron Nano 9B", provider: "NVIDIA", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 32768 },
-      { id: "nvidia/nemotron-3-nano-30b-a3b:free", name: "Nemotron 3 Nano 30B", provider: "NVIDIA", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 256000 },
-      { id: "meta-llama/llama-3.2-3b-instruct:free", name: "Llama 3.2 3B", provider: "Meta", pricePer1M: 0, inputPrice: 0, outputPrice: 0, isFree: true, contextLength: 131072 },
-      // Cheap paid models — 31-FIX-5: fixed stale model IDs
-      { id: "google/gemini-2.0-flash-lite-001", name: "Gemini 2.0 Flash Lite", provider: "Google", pricePer1M: 0.075, inputPrice: 0.075, outputPrice: 0.30, isFree: false, contextLength: 1048576 },
-      { id: "openai/gpt-4o-mini", name: "GPT-4o mini", provider: "OpenAI", pricePer1M: 0.15, inputPrice: 0.15, outputPrice: 0.60, isFree: false, contextLength: 128000 },
-      { id: "google/gemini-2.0-flash-001", name: "Gemini 2.0 Flash", provider: "Google", pricePer1M: 0.10, inputPrice: 0.10, outputPrice: 0.40, isFree: false, contextLength: 1048576 },
-      { id: "anthropic/claude-3-haiku", name: "Claude 3 Haiku", provider: "Anthropic", pricePer1M: 0.25, inputPrice: 0.25, outputPrice: 1.25, isFree: false, contextLength: 200000 },
-      { id: "deepseek/deepseek-chat", name: "DeepSeek V3.2", provider: "DeepSeek", pricePer1M: 0.27, inputPrice: 0.14, outputPrice: 0.28, isFree: false, contextLength: 65536 },  // CONCERN-2 FIX: Quality-ranked paid model
-      { id: "meta-llama/llama-3.1-70b-instruct", name: "Llama 3.1 70B", provider: "Meta", pricePer1M: 0.35, inputPrice: 0.35, outputPrice: 0.40, isFree: false, contextLength: 131072 },
-      { id: "qwen/qwen-2.5-72b-instruct", name: "Qwen 2.5 72B", provider: "Qwen", pricePer1M: 0.50, inputPrice: 0.40, outputPrice: 0.60, isFree: false, contextLength: 131072 },  // CONCERN-2 FIX: Quality-ranked paid model
-      { id: "z-ai/glm-5", name: "GLM-5", provider: "Zhipu AI", pricePer1M: 1.0, inputPrice: 1.0, outputPrice: 1.0, isFree: false, contextLength: 131072 },  // CONCERN-2 FIX: Frontier-class (86.0% GPQA)
-      { id: "moonshotai/kimi-k2.5", name: "Kimi K2.5", provider: "Moonshot AI", pricePer1M: 2.0, inputPrice: 2.0, outputPrice: 2.0, isFree: false, contextLength: 1048576 },  // CONCERN-2 FIX: Frontier-class (87.6% GPQA)
-      { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", pricePer1M: 2.50, inputPrice: 2.50, outputPrice: 10.0, isFree: false, contextLength: 128000 },
-      { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", provider: "Google", pricePer1M: 1.25, inputPrice: 1.25, outputPrice: 10.0, isFree: false, contextLength: 1048576 },
+
+      // === PAID TIER (verified working, quality-ranked) ===
+      // Tier 1: Frontier-class
+      { id: "z-ai/glm-5", name: "GLM-5", provider: "Zhipu AI", pricePer1M: 1.0, inputPrice: 1.0, outputPrice: 1.0, isFree: false, contextLength: 131072 },
+
+      // Tier 2: Strong reasoning, verified benchmarks
+      { id: "deepseek/deepseek-chat", name: "DeepSeek V3.2", provider: "DeepSeek", pricePer1M: 0.27, inputPrice: 0.14, outputPrice: 0.28, isFree: false, contextLength: 65536 },
+      { id: "qwen/qwen-2.5-72b-instruct", name: "Qwen 2.5 72B", provider: "Qwen", pricePer1M: 0.50, inputPrice: 0.40, outputPrice: 0.60, isFree: false, contextLength: 131072 },
+      { id: "mistralai/mistral-large-2512", name: "Mistral Large", provider: "Mistral", pricePer1M: 2.0, inputPrice: 2.0, outputPrice: 6.0, isFree: false, contextLength: 131072 },
+
+      // NOTE: Kimi K2.5 EXCLUDED — 600s/question, always times out in 25s race
+      // NOTE: inception/mercury* EXCLUDED — unverified quality, short answers
+      // NOTE: kwaipilot/kat-coder-pro EXCLUDED — unverified, coder-oriented
+      // NOTE: openrouter/bodybuilder EXCLUDED — returns JSON, not answers
+      // NOTE: google/gemini-3.1-pro EXCLUDED — $0.015/call, way too expensive for council
     ];
   }
 }

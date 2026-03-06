@@ -19,7 +19,7 @@ export class CouncilSelector {
     "mistralai/mistral-small-3.1-24b-instruct:free": 3, // Good for coding/instruction
 
     // === PAID TIER (quality-ranked) ===
-    "moonshotai/kimi-k2.5": 1,                        // 87.6% GPQA Diamond — frontier-class
+    // "moonshotai/kimi-k2.5": 1,                     // DISABLED: 87.6% GPQA but 600s/question = always times out in 25s race
     "z-ai/glm-5": 1,                                  // 86.0% GPQA Diamond — near-frontier
     "deepseek/deepseek-chat": 2,                      // 79.9% GPQA, strong reasoning, very cheap
     "qwen/qwen-2.5-72b-instruct": 2,                  // Excellent all-rounder
@@ -34,16 +34,17 @@ export class CouncilSelector {
     const { budget } = request;
 
     // TASK-A3: Budget filtering (removed MAX_MODEL_PRICE ceiling — let budget handle it)
+    // CRITICAL FIX: Exclude free models when budget is NOT "free" to avoid rate limits
     let candidates: ModelInfo[];
     if (budget === "free") {
       candidates = allModels.filter(m => m.isFree);
     } else if (budget === "low") {
-      candidates = allModels.filter(m => m.pricePer1M < 0.5);
+      candidates = allModels.filter(m => !m.isFree && m.pricePer1M < 0.5);
     } else if (budget === "medium") {
-      candidates = allModels.filter(m => m.pricePer1M < 5.0);
+      candidates = allModels.filter(m => !m.isFree && m.pricePer1M < 5.0);
     } else {
       // "high" — use all models except premium ($10+)
-      candidates = allModels.filter(m => m.pricePer1M < 10.0);
+      candidates = allModels.filter(m => !m.isFree && m.pricePer1M < 10.0);
     }
 
     // TASK-A3: Quality-ranked selection
@@ -51,28 +52,28 @@ export class CouncilSelector {
 
     switch (tier) {
       case "SIMPLE":
-        // Select 5 quality-ranked free/cheap models (targetCount=3 + 2 backups)
+        // Select 3 quality-ranked free/cheap models
         selected = this.pickByQuality(
           candidates.filter(m => m.isFree || m.pricePer1M < 1.0),
-          5  // CONCERN-1 FIX: Reduced from 10 to targetCount + 2
+          3
         );
         break;
 
       case "MEDIUM":
-        // Select 5 quality-ranked models (targetCount=3 + 2 backups): prioritize cheap+smart over free
+        // Select 3 quality-ranked models: prioritize cheap+smart over free
         const cheapAndSmart = candidates.filter(m => !m.isFree && m.pricePer1M < 5.0);
         selected = this.pickByQuality(
           cheapAndSmart.length >= 3 ? cheapAndSmart : candidates,
-          5  // CONCERN-1 FIX: Reduced from 8 to targetCount + 2
+          3
         );
         break;
 
       case "COMPLEX":
-        // Select 6 quality-ranked models (targetCount=4 + 2 backups): prioritize smart tier (1-5 $/1M)
+        // Select 3 quality-ranked models: prioritize smart tier (1-5 $/1M)
         const smartTier = candidates.filter(m => m.pricePer1M >= 0.5 && m.pricePer1M < 5.0);
         selected = this.pickByQuality(
-          smartTier.length >= 4 ? smartTier : candidates,
-          6  // CONCERN-1 FIX: Reduced from 8 to targetCount + 2
+          smartTier.length >= 3 ? smartTier : candidates,
+          3
         );
         break;
     }
