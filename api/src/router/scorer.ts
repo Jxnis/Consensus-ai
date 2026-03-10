@@ -63,7 +63,8 @@ export type TopicCategory =
   | 'math' | 'math/calculus' | 'math/algebra' | 'math/statistics' | 'math/discrete'
   | 'science' | 'science/physics' | 'science/chemistry' | 'science/biology' | 'science/medicine'
   | 'writing' | 'writing/creative' | 'writing/technical' | 'writing/business' | 'writing/academic'
-  | 'general' | 'reasoning';
+  | 'reasoning' | 'reasoning/logical' | 'reasoning/multistep'
+  | 'general';
 
 export interface TopicDetectionResult {
   primary: string;     // Top-level category: 'code', 'math', etc.
@@ -95,6 +96,9 @@ const TOP_LEVEL_MARKERS = {
     // Math topics
     /\b(calculus|geometry|trigonometry|arithmetic|quadratic|linear algebra|differential)\b/i,
     /\b(graph|function|formula|root|coefficient|exponent)\b/i,
+    // Statistics - STRENGTHENED
+    /\b(mean|median|mode|variance|standard deviation|distribution|regression|hypothesis|p-value)\b/i,
+    /\b(dataset|correlation|normal distribution|statistical significance)\b/i,
     // Math notation
     /[=+\-*/^].*\d/, // math operators with numbers
     /\b(sin|cos|tan|sqrt|log|exp|sum|integral)\b/i,
@@ -121,9 +125,11 @@ const TOP_LEVEL_MARKERS = {
     /\b(paragraph|sentence|grammar|vocabulary|rhetoric|composition)\b/i,
   ],
   reasoning: [
-    /\b(logic|puzzle|deduce|infer|strategy|plan|optimize|multi-step|reasoning)\b/i,
-    /\b(if.*then|premise|conclusion|argument|fallacy)\b/i,
-    /\b(problem.?solving|critical thinking|decision)\b/i,
+    /\b(logic|puzzle|deduce|infer|strategy|plan|optimize|multi-step|reasoning|syllogism)\b/i,
+    /\b(if.*then|premise|conclusion|argument|fallacy|contradict|valid|invalid)\b/i,
+    /\b(problem.?solving|critical thinking|decision|workflow|sequence|stages|process)\b/i,
+    /\ball\s+(a|b|c|x|y|z)\s+are/i,  // Logical statements like "all A are B"
+    /\bgiven.*premises?\b/i,  // Premise-based reasoning
   ],
 };
 
@@ -151,7 +157,7 @@ const SUBCATEGORY_MARKERS = {
 
   'math/calculus': [/integral/i, /derivative/i, /limit/i, /differentiat/i, /taylor/i, /series/i],
   'math/algebra': [/equation/i, /linear algebra/i, /matrix/i, /eigenvalue/i, /polynomial/i, /quadratic/i],
-  'math/statistics': [/probability/i, /distribution/i, /hypothesis/i, /p-value/i, /regression/i, /mean/i, /variance/i, /standard deviation/i],
+  'math/statistics': [/probability/i, /distribution/i, /hypothesis/i, /p-value/i, /regression/i, /mean/i, /variance/i, /standard deviation/i, /\bhypothesis testing\b/i, /\bp-value\b/i],
   'math/discrete': [/combinatorics/i, /permutation/i, /graph theory/i, /set theory/i, /boolean/i, /proof/i],
 
   'science/physics': [/mechanics/i, /quantum/i, /thermodynamic/i, /electromagnetism/i, /relativity/i, /force/i, /energy/i, /momentum/i],
@@ -163,6 +169,9 @@ const SUBCATEGORY_MARKERS = {
   'writing/technical': [/documentation/i, /manual/i, /api reference/i, /tutorial/i, /technical/i, /specification/i],
   'writing/business': [/email/i, /proposal/i, /report/i, /meeting/i, /professional/i, /corporate/i],
   'writing/academic': [/paper/i, /citation/i, /abstract/i, /research/i, /thesis/i, /journal/i, /scholarly/i],
+
+  'reasoning/logical': [/logic/i, /deduce/i, /infer/i, /syllogism/i, /premise/i, /conclusion/i, /proof/i, /contradict/i, /fallacy/i, /if.*then/i, /boolean/i, /valid.*syllogism/i, /\bwet.*ground/i],
+  'reasoning/multistep': [/multi-?step/i, /\bplan\b/i, /strategy/i, /sequence/i, /step-by-step/i, /chain/i, /\bprocess\b/i, /workflow/i, /stages/i, /create.*plan/i],
 };
 
 /**
@@ -236,7 +245,8 @@ export function detectTopicDetailed(prompt: string): TopicDetectionResult {
   const confidence = Math.min(primaryScore / 50, 1.0);
 
   // Pass 2: If confidence is high enough, try subcategory detection
-  if (confidence >= 0.4) {
+  // Lowered from 0.4 to 0.3 to allow better subcategory detection
+  if (confidence >= 0.3) {
     // Only check subcategories for this primary category
     const subcategoryPrefix = `${primaryCategory}/`;
     let bestSubcategory: string | null = null;

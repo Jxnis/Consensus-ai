@@ -64,5 +64,7 @@ export interface CloudflareBindings {
   X402_WALLET_ADDRESS: string;
   CONSENSUS_CACHE: KVNamespace;
   SCORE_DB: D1Database;
+  AI: any; // Workers AI binding
   ENVIRONMENT?: string;
+  SEMANTIC_ROUTING_ENABLED?: string; // Feature flag: 'true' | 'false'
 }

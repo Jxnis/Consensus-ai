@@ -440,18 +440,71 @@ app.post("/v1/chat/completions", async (c) => {
 
         // Cache miss or cached model not found - query D1
         if (candidateModels.length === 0) {
-          const { getModelsForDomain } = await import('./db/queries');
-          const models = await getModelsForDomain(c.env.SCORE_DB, topic, request.budget || "medium");
+          // Try semantic routing if enabled
+          const semanticRoutingEnabled = c.env.SEMANTIC_ROUTING_ENABLED === 'true';
+          let semanticResult = null;
 
-          if (models && models.length > 0) {
-            candidateModels = models.slice(0, 3); // Top 3 models
-            dataSource = 'database';
-            console.log(`[Smart Router] D1 returned ${models.length} models, using top 3 for failover chain`);
+          if (semanticRoutingEnabled && c.env.AI && c.env.SCORE_DB) {
+            try {
+              const { SemanticRouter } = await import('./router/semantic-router');
+              const semanticRouter = new SemanticRouter(c.env, true);
+              const messages = (body as any).messages || [];
+              const lastMessage = messages[messages.length - 1];
+              const query = typeof lastMessage?.content === 'string' ? lastMessage.content : JSON.stringify(lastMessage?.content || '');
 
-            // Cache the top model for future requests (async, don't block)
-            c.executionCtx.waitUntil(
-              routeCache.cacheRoute(topic, request.budget || "medium", models[0].id, models[0].name)
-            );
+              // Use parent domain for semantic routing (embeddings are top-level only)
+              const topLevelDomain = topic.includes('/') ? topic.split('/')[0] : topic;
+
+              semanticResult = await semanticRouter.route(
+                query,
+                topLevelDomain,
+                request.budget || "medium",
+                topicDetection.confidence
+              );
+
+              if (semanticResult && semanticResult.semantic_enabled) {
+                // Get the semantic-selected model plus backups
+                const { getModelById, getModelsForDomain } = await import('./db/queries');
+                const primaryModel = await getModelById(c.env.SCORE_DB, semanticResult.model_id);
+
+                if (primaryModel) {
+                  candidateModels = [primaryModel];
+                  dataSource = 'semantic';
+                  console.log(`[Semantic Router] Selected ${semanticResult.model_id} (score: ${semanticResult.final_score.toFixed(3)}, latency: ${semanticResult.semantic_latency_ms}ms)`);
+
+                  // Add backup models for failover
+                  const backups = await getModelsForDomain(c.env.SCORE_DB, topic, request.budget || "medium");
+                  if (backups && backups.length > 1) {
+                    const backupModels = backups.filter(m => m.id !== semanticResult!.model_id).slice(0, 2);
+                    candidateModels.push(...backupModels);
+                  }
+
+                  // Cache the semantic result
+                  c.executionCtx.waitUntil(
+                    routeCache.cacheRoute(topic, request.budget || "medium", semanticResult.model_id, primaryModel.name)
+                  );
+                }
+              }
+            } catch (semanticErr) {
+              console.error(`[Semantic Router] Failed, falling back to traditional routing:`, semanticErr instanceof Error ? semanticErr.message : semanticErr);
+            }
+          }
+
+          // Fallback to traditional D1 routing if semantic routing disabled or failed
+          if (candidateModels.length === 0) {
+            const { getModelsForDomain } = await import('./db/queries');
+            const models = await getModelsForDomain(c.env.SCORE_DB, topic, request.budget || "medium");
+
+            if (models && models.length > 0) {
+              candidateModels = models.slice(0, 3); // Top 3 models
+              dataSource = semanticResult?.fallback_reason ? `database_fallback:${semanticResult.fallback_reason}` : 'database';
+              console.log(`[Smart Router] D1 returned ${models.length} models, using top 3 for failover chain`);
+
+              // Cache the top model for future requests (async, don't block)
+              c.executionCtx.waitUntil(
+                routeCache.cacheRoute(topic, request.budget || "medium", models[0].id, models[0].name)
+              );
+            }
           }
         }
       }
@@ -1007,6 +1060,51 @@ app.post("/admin/create-key", async (c) => {
   );
 
   return c.json({ apiKey, userId: body.userId, tier: body.tier });
+});
+
+// Admin: Generate embedding (for pre-computing model embeddings)
+app.post("/admin/generate-embedding", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  try {
+    const { text } = await c.req.json();
+    if (!text || typeof text !== 'string') {
+      return c.json({ error: "Missing or invalid 'text' parameter" }, 400);
+    }
+
+    // Generate embedding using Workers AI
+    // @ts-ignore - Workers AI type not available yet
+    const response = await c.env.AI.run('@cf/baai/bge-base-en-v1.5', {
+      text: [text],
+    });
+
+    // @ts-ignore
+    if (!response?.data || !response.data[0]) {
+      return c.json({ error: "Invalid embedding response from Workers AI" }, 500);
+    }
+
+    // @ts-ignore
+    const embedding = response.data[0];
+
+    return c.json({
+      embedding: Array.from(embedding), // Convert to regular array for JSON
+      dimensions: embedding.length,
+      model: '@cf/baai/bge-base-en-v1.5',
+    });
+
+  } catch (err) {
+    console.error('[Admin] Embedding generation failed:', err);
+    return c.json({
+      error: "Embedding generation failed",
+      details: err instanceof Error ? err.message : String(err)
+    }, 500);
+  }
 });
 
 // Admin: Monitoring stats (requires admin auth)
