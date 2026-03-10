@@ -132,8 +132,12 @@ app.use("/v1/*", async (c, next) => {
       } | null;
 
       if (legacyKeyData) {
-        await c.env.CONSENSUS_CACHE.put(`apikey:${keyHash}`, JSON.stringify(legacyKeyData), { expirationTtl: 31536000 });
-        await c.env.CONSENSUS_CACHE.delete(`apikey:${apiKey}`);
+        try {
+          await c.env.CONSENSUS_CACHE.put(`apikey:${keyHash}`, JSON.stringify(legacyKeyData), { expirationTtl: 31536000 });
+          await c.env.CONSENSUS_CACHE.delete(`apikey:${apiKey}`);
+        } catch (err) {
+          console.error("[Auth] API key migration failed (non-critical):", err instanceof Error ? err.message : err);
+        }
         keyData = legacyKeyData;
       }
     }
@@ -972,7 +976,11 @@ app.post("/admin/create-key", async (c) => {
   if (adminCount >= 10) {
     return c.json({ error: "Admin rate limit exceeded. Max 10 requests/hour." }, 429);
   }
-  await c.env.CONSENSUS_CACHE.put(adminRateLimitKey, String(adminCount + 1), { expirationTtl: 3600 });
+  try {
+    await c.env.CONSENSUS_CACHE.put(adminRateLimitKey, String(adminCount + 1), { expirationTtl: 3600 });
+  } catch (err) {
+    console.error("[Admin] Rate limit counter write failed (non-critical):", err instanceof Error ? err.message : err);
+  }
 
   // Validate request body with Zod
   const bodySchema = z.object({

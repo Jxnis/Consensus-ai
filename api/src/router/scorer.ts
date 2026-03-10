@@ -71,31 +71,72 @@ export interface TopicDetectionResult {
   confidence: number;  // 0-1, based on marker matches
 }
 
-// Top-level category markers
+// Top-level category markers (improved with better coverage)
 const TOP_LEVEL_MARKERS = {
   code: [
+    // Programming keywords
     /\b(function|class|def|import|const|let|var|async|await|return)\b/i,
-    /\b(implement|debug|refactor|compile|runtime|typescript|python|javascript|react|vue|angular)\b/i,
-    /\b(API|endpoint|SQL|query|database|server|frontend|backend)\b/i,
+    /\b(implement|debug|refactor|compile|runtime|script|program|algorithm)\b/i,
+    // Languages and frameworks
+    /\b(typescript|python|javascript|react|vue|angular|rust|go|java|c\+\+|ruby|php)\b/i,
+    // Code-specific terms
+    /\b(API|endpoint|SQL|query|database|server|frontend|backend|docker|kubernetes)\b/i,
+    // Syntax indicators
     /[{}\[\]();]/, // brackets/semicolons suggest code
     /```/, // markdown code blocks
+    // Explicit code instructions (boosted scoring)
+    /write\s+(a|an)\s+(python|javascript|typescript|rust|go|java|c\+\+|sql|bash|shell)/i,
+    /\b(code review|pull request|git|github|commit|branch)\b/i,
   ],
   math: [
+    // Math operations
     /\b(calculate|compute|solve|equation|integral|derivative|probability|statistical|algebra|proof|theorem)\b/i,
-    /\b(matrix|vector|eigenvalue|polynomial|logarithm|factorial|limit)\b/i,
+    /\b(matrix|vector|eigenvalue|polynomial|logarithm|factorial|limit|summation)\b/i,
+    // Math topics
+    /\b(calculus|geometry|trigonometry|arithmetic|quadratic|linear algebra|differential)\b/i,
+    /\b(graph|function|formula|root|coefficient|exponent)\b/i,
+    // Math notation
     /[=+\-*/^].*\d/, // math operators with numbers
+    /\b(sin|cos|tan|sqrt|log|exp|sum|integral)\b/i,
   ],
   science: [
-    /\b(molecule|enzyme|protein|phenotype|genome|quantum|electron|photon|thermodynamic|reaction|catalyst|spectroscopy)\b/i,
-    /\b(hypothesis|experiment|observation|empirical|physics|chemistry|biology|neuroscience|clinical|pharmacology)\b/i,
+    // Physics - EXPANDED
+    /\b(physics|force|energy|motion|velocity|acceleration|gravity|newton|mass|momentum|friction)\b/i,
+    /\b(quantum|electron|photon|atom|nuclear|radiation|electromagnetic|wave|particle)\b/i,
+    /\b(thermodynamic|heat|temperature|pressure|relativity|mechanics)\b/i,
+    // Chemistry - EXPANDED
+    /\b(chemistry|molecule|element|compound|reaction|chemical|bond|catalyst|acid|base|ion)\b/i,
+    /\b(periodic table|valence|oxidation|synthesis|solvent|solution)\b/i,
+    // Biology - EXPANDED
+    /\b(biology|cell|DNA|RNA|gene|protein|enzyme|organism|species|evolution)\b/i,
+    /\b(photosynthesis|respiration|mitosis|meiosis|chromosome|inheritance|ecosystem)\b/i,
+    /\b(bacteria|virus|infection|immune|vaccine|antibody|tissue|organ)\b/i,
+    // General science terms
+    /\b(experiment|hypothesis|theory|scientific method|observation|data|measurement)\b/i,
+    /\b(climate|atmosphere|earth|geology|earthquake|volcano|ocean|planet)\b/i,
   ],
   writing: [
     /\b(write|essay|article|blog|summarize|paraphrase|rewrite|translate|creative|story|poem|email|letter)\b/i,
-    /\b(tone|style|persuasive|narrative|draft|edit|proofread|proposal|report)\b/i,
+    /\b(tone|style|persuasive|narrative|draft|edit|proofread|proposal|report|document)\b/i,
+    /\b(paragraph|sentence|grammar|vocabulary|rhetoric|composition)\b/i,
   ],
   reasoning: [
     /\b(logic|puzzle|deduce|infer|strategy|plan|optimize|multi-step|reasoning)\b/i,
     /\b(if.*then|premise|conclusion|argument|fallacy)\b/i,
+    /\b(problem.?solving|critical thinking|decision)\b/i,
+  ],
+};
+
+// Negative signals - reduce score if these conflict with detected category
+const NEGATIVE_SIGNALS: Record<string, RegExp[]> = {
+  // If "write" appears with code terms, it's code not writing
+  writing: [
+    /write\s+(a|an)\s+(function|class|script|program|code|algorithm)/i,
+    /write.*python|javascript|typescript|sql|bash/i,
+  ],
+  // If asking "what is X" about a science topic, it's science not general
+  general: [
+    /\b(what is|explain|describe|how does|why does).*(physics|chemistry|biology|DNA|photosynthesis|gravity|evolution|quantum)/i,
   ],
 };
 
@@ -149,25 +190,47 @@ export function detectTopicDetailed(prompt: string): TopicDetectionResult {
     general: 0,
   };
 
+  // Score each category based on marker matches
   for (const [category, markers] of Object.entries(TOP_LEVEL_MARKERS)) {
     for (const marker of markers) {
       if (marker.test(prompt)) {
-        topLevelScores[category] += 10;
+        // Boost code detection when "write a [language]" pattern appears
+        if (category === 'code' && /write\s+(a|an)\s+(python|javascript|typescript|rust|go|java|sql|bash)/i.test(prompt)) {
+          topLevelScores[category] += 20; // Strong signal
+        } else {
+          topLevelScores[category] += 10;
+        }
       }
     }
   }
 
-  // Find best top-level category
-  const sortedTopLevel = Object.entries(topLevelScores).sort((a, b) => b[1] - a[1]);
-  const [primaryCategory, primaryScore] = sortedTopLevel[0];
+  // Apply negative signals
+  for (const [category, negativeMarkers] of Object.entries(NEGATIVE_SIGNALS)) {
+    for (const marker of negativeMarkers) {
+      if (marker.test(prompt)) {
+        topLevelScores[category] -= 15; // Penalize conflicting categories
+      }
+    }
+  }
 
-  // If no clear category detected, return 'general'
-  if (primaryScore === 0) {
+  // Boost science for explicit science questions that might be misclassified as general
+  if (/\b(explain|describe|what is|how does|why does)\b.*\b(physics|chemistry|biology|science|scientific)\b/i.test(prompt)) {
+    topLevelScores.science += 15;
+  }
+
+  // Find best top-level category
+  const sortedTopLevel = Object.entries(topLevelScores)
+    .sort((a, b) => b[1] - a[1])
+    .filter(([_, score]) => score > 0); // Only consider positive scores
+
+  if (sortedTopLevel.length === 0) {
     return {
       primary: 'general',
       confidence: 0,
     };
   }
+
+  const [primaryCategory, primaryScore] = sortedTopLevel[0];
 
   // Calculate confidence (0-1 scale, saturates at score=50)
   const confidence = Math.min(primaryScore / 50, 1.0);

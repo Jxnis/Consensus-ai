@@ -266,9 +266,13 @@ export class CouncilEngine {
 
     // 7. Cache high-confidence results
     if (consensusResponse.confidence > 0.8) {
-      await this.kv.put(cacheKey, JSON.stringify(consensusResponse), {
-        expirationTtl: 86400 // 24 hours
-      });
+      try {
+        await this.kv.put(cacheKey, JSON.stringify(consensusResponse), {
+          expirationTtl: 86400 // 24 hours
+        });
+      } catch (err) {
+        console.error("[ResultCache] Failed to cache consensus result (non-critical):", err instanceof Error ? err.message : err);
+      }
     }
 
     return consensusResponse;
@@ -475,9 +479,14 @@ Focus on accuracy and correctness over agreeing with the majority.`;
   }
 
   private async incrementCounter(key: string): Promise<void> {
-    const current = await this.kv.get(key);
-    const count = current ? parseInt(current, 10) : 0;
-    await this.kv.put(key, String(count + 1), { expirationTtl: CouncilEngine.METRICS_TTL_SECONDS });
+    try {
+      const current = await this.kv.get(key);
+      const count = current ? parseInt(current, 10) : 0;
+      await this.kv.put(key, String(count + 1), { expirationTtl: CouncilEngine.METRICS_TTL_SECONDS });
+    } catch (err) {
+      // Don't crash requests if metrics KV writes fail (e.g., daily write limit exceeded)
+      console.error(`[Metrics] Failed to increment counter ${key}:`, err instanceof Error ? err.message : err);
+    }
   }
 
   /**

@@ -61,7 +61,11 @@ export class ModelCircuitBreaker {
         if (timeSinceFailure > COOLDOWN_MS) {
           // Transition to half-open (allow probe request)
           state.status = 'half-open';
-          await this.kv.put(key, JSON.stringify(state), { expirationTtl: CIRCUIT_STATE_TTL });
+          try {
+            await this.kv.put(key, JSON.stringify(state), { expirationTtl: CIRCUIT_STATE_TTL });
+          } catch (err) {
+            console.error(`[CircuitBreaker] Failed to update state (non-critical):`, err instanceof Error ? err.message : err);
+          }
           console.log(`[CircuitBreaker] ${modelId}: open → half-open (cooldown expired, allowing probe)`);
           return true;
         }
@@ -131,7 +135,11 @@ export class ModelCircuitBreaker {
       }
     }
 
-    await this.kv.put(key, JSON.stringify(state), { expirationTtl: CIRCUIT_STATE_TTL });
+    try {
+      await this.kv.put(key, JSON.stringify(state), { expirationTtl: CIRCUIT_STATE_TTL });
+    } catch (err) {
+      console.error(`[CircuitBreaker] Failed to record failure (non-critical):`, err instanceof Error ? err.message : err);
+    }
   }
 
   /**
