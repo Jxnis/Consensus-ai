@@ -17,19 +17,16 @@
  * 2. Manual: POST /admin/sync-huggingface
  */
 
-import { recalculateScores } from '../score-calculator';
-
 interface HFLeaderboardEntry {
-  model_name_for_query: string; // e.g., "meta-llama/Llama-3.3-70B-Instruct"
-  fullname: string;              // Display name
-  // Benchmark scores (0-100 scale)
-  GPQA?: number;
-  'MMLU-PRO'?: number;
-  MATH?: number;
-  BBH?: number;
-  MUSR?: number;
-  IFEval?: number;
-  // Could have other fields, but we only need scores
+  id?: string;
+  model?: {
+    name?: string;
+  };
+  evaluations?: Record<string, {
+    name?: string;
+    value?: number;
+    normalized_score?: number;
+  }>;
 }
 
 /**
@@ -70,16 +67,60 @@ const HF_TO_OPENROUTER_MAPPING: Record<string, string> = {
 };
 
 /**
- * Map HF benchmark names to our domain taxonomy
+ * Map HF evaluation keys to our benchmark ids + domain taxonomy
  */
-const BENCHMARK_TO_DOMAIN: Record<string, string> = {
-  'GPQA': 'science',           // Graduate-level science questions
-  'MMLU-PRO': 'general',       // Multi-domain knowledge (covers many topics)
-  'MATH': 'math',              // Mathematical reasoning
-  'BBH': 'reasoning',          // Big Bench Hard (logic, reasoning)
-  'MUSR': 'reasoning',         // Multi-Step Reasoning
-  'IFEval': 'general',         // Instruction following (general capability)
+const HF_EVAL_MAPPING: Record<string, { benchmark: string; domain: string }> = {
+  gpqa: { benchmark: "gpqa", domain: "science" },
+  mmlu_pro: { benchmark: "mmlu_pro", domain: "general" },
+  math: { benchmark: "math", domain: "math" },
+  bbh: { benchmark: "bbh", domain: "reasoning" },
+  musr: { benchmark: "musr", domain: "reasoning" },
+  ifeval: { benchmark: "ifeval", domain: "general" },
 };
+
+function normalizeModelIdentifier(input: string): string {
+  return input.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function buildModelLookup(rows: Array<{ id: string; name: string }>): Map<string, string> {
+  const lookup = new Map<string, string>();
+
+  for (const row of rows) {
+    const candidates = [
+      row.id,
+      row.name,
+      row.id.split("/").pop() || row.id,
+    ];
+
+    for (const candidate of candidates) {
+      const key = normalizeModelIdentifier(candidate);
+      if (!lookup.has(key)) {
+        lookup.set(key, row.id);
+      }
+    }
+  }
+
+  return lookup;
+}
+
+function resolveOpenRouterId(
+  entry: HFLeaderboardEntry,
+  modelLookup: Map<string, string>
+): string | null {
+  const modelName = entry.model?.name;
+  if (!modelName) return null;
+
+  // Prefer curated hard mappings for known naming mismatches.
+  const mapped = HF_TO_OPENROUTER_MAPPING[modelName];
+  if (mapped) return mapped;
+
+  const normalized = normalizeModelIdentifier(modelName);
+  if (modelLookup.has(normalized)) {
+    return modelLookup.get(normalized)!;
+  }
+
+  return null;
+}
 
 /**
  * Scrape HuggingFace Open LLM Leaderboard and update benchmark scores
@@ -112,47 +153,32 @@ export async function scrapeHuggingFace(db: D1Database): Promise<{ updated: numb
     console.log(`[huggingface] Fetched ${data.length} models from leaderboard`);
 
     const timestamp = new Date().toISOString();
+    const dbModels = await db
+      .prepare(`SELECT id, name FROM models WHERE is_available = 1`)
+      .all<{ id: string; name: string }>();
+    const modelLookup = buildModelLookup(dbModels.results || []);
 
     // Process each model
     for (const entry of data) {
-      // Map HF model name to OpenRouter ID
-      const openrouterId = HF_TO_OPENROUTER_MAPPING[entry.model_name_for_query];
+      // Resolve HF model name to OpenRouter model id.
+      const openrouterId = resolveOpenRouterId(entry, modelLookup);
 
       if (!openrouterId) {
-        // Skip models not in our mapping (most HF models aren't available via OpenRouter)
+        // Skip models that are not available in our OpenRouter-backed registry.
         continue;
       }
 
-      // Check if this model exists in our database
-      const modelExists = await db
-        .prepare(`SELECT id FROM models WHERE id = ?`)
-        .bind(openrouterId)
-        .first();
+      const evaluations = entry.evaluations || {};
+      for (const [evalKey, evalValue] of Object.entries(evaluations)) {
+        const mapping = HF_EVAL_MAPPING[evalKey];
+        if (!mapping) continue;
 
-      if (!modelExists) {
-        console.log(`[huggingface] Skipping ${entry.model_name_for_query} - not in models table (run sync-pricing first)`);
-        continue;
-      }
-
-      // Insert scores for each benchmark
-      const benchmarks: Array<{ name: string; score: number | undefined }> = [
-        { name: 'GPQA', score: entry.GPQA },
-        { name: 'MMLU-PRO', score: entry['MMLU-PRO'] },
-        { name: 'MATH', score: entry.MATH },
-        { name: 'BBH', score: entry.BBH },
-        { name: 'MUSR', score: entry.MUSR },
-        { name: 'IFEval', score: entry.IFEval },
-      ];
-
-      for (const benchmark of benchmarks) {
-        if (benchmark.score === undefined || benchmark.score === null) {
-          continue; // Skip if score not available
-        }
-
-        const domain = BENCHMARK_TO_DOMAIN[benchmark.name];
-        if (!domain) {
-          continue; // Skip if domain mapping not defined
-        }
+        const normalizedScore = evalValue.normalized_score;
+        const rawValue = evalValue.value;
+        const score = typeof normalizedScore === "number"
+          ? normalizedScore
+          : (typeof rawValue === "number" ? rawValue * 100 : undefined);
+        if (score === undefined || Number.isNaN(score)) continue;
 
         try {
           // Upsert benchmark score
@@ -167,28 +193,24 @@ export async function scrapeHuggingFace(db: D1Database): Promise<{ updated: numb
             )
             .bind(
               openrouterId,
-              benchmark.name.toLowerCase(),
-              domain,
-              benchmark.score,
-              benchmark.score, // raw_score = score (HF already normalizes to 0-100)
+              mapping.benchmark,
+              mapping.domain,
+              score,
+              score,
               timestamp
             )
             .run();
 
           updated++;
         } catch (err) {
-          const error = `Failed to insert score for ${openrouterId} / ${benchmark.name}: ${err}`;
+          const error = `Failed to insert score for ${openrouterId} / ${evalKey}: ${err}`;
           errors.push(error);
           console.error(`[huggingface] ${error}`);
         }
       }
 
-      console.log(`[huggingface] Updated scores for ${openrouterId} (${entry.fullname})`);
+      console.log(`[huggingface] Updated scores for ${openrouterId} (${entry.model?.name || "unknown"})`);
     }
-
-    // Recalculate composite scores after updating benchmark data
-    console.log('[huggingface] Recalculating composite scores...');
-    await recalculateScores(db);
 
     console.log(`[huggingface] Complete. Updated ${updated} benchmark scores.`);
     return { updated, errors };

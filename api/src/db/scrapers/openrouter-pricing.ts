@@ -12,8 +12,6 @@
  * 2. Manual: POST /admin/sync-pricing
  */
 
-import { recalculateScores } from '../score-calculator';
-
 interface OpenRouterModel {
   id: string;
   name: string;
@@ -143,10 +141,6 @@ export async function scrapeOpenRouterPricing(
         console.log(`[openrouter-pricing] Marked ${dbModelId} as unavailable`);
       }
     }
-
-    // Recalculate value scores after pricing update
-    console.log('[openrouter-pricing] Recalculating value scores...');
-    await recalculateScores(db);
 
     console.log(`[openrouter-pricing] Complete. Updated ${updated} models.`);
     return { updated, errors };
