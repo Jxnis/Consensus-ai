@@ -103,6 +103,29 @@ export async function getModelsForDomain(
   domain: string,
   budget?: string
 ): Promise<ModelProfile[]> {
+  const resolvedBudget = budget || "medium";
+
+  let models = await queryModelsForDomain(db, domain, resolvedBudget);
+
+  if (models.length === 0 && domain.includes("/")) {
+    const parentDomain = domain.split("/")[0];
+    console.log(`[queries] No models for '${domain}', trying parent '${parentDomain}'`);
+    models = await queryModelsForDomain(db, parentDomain, resolvedBudget);
+  }
+
+  if (models.length === 0 && domain !== "general") {
+    console.log(`[queries] No models for '${domain}', trying fallback 'general'`);
+    models = await queryModelsForDomain(db, "general", resolvedBudget);
+  }
+
+  return models;
+}
+
+async function queryModelsForDomain(
+  db: D1Database,
+  domain: string,
+  budget: string
+): Promise<ModelProfile[]> {
   let query = `
     SELECT
       m.id,
@@ -133,7 +156,7 @@ export async function getModelsForDomain(
     query += ` AND m.is_free = 0`;
   }
 
-  query += ` ORDER BY cs.value_score DESC`;
+  query += ` ORDER BY cs.value_score DESC LIMIT 10`;
 
   const results = await db.prepare(query).bind(...bindings).all<ModelProfile>();
 
