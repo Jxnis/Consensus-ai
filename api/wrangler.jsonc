@@ -9,7 +9,8 @@
 	"kv_namespaces": [
 		{
 			"binding": "CONSENSUS_CACHE",
-			"id": "91b5ba295f774396812f197398b2921f"
+			"id": "91b5ba295f774396812f197398b2921f",
+			"preview_id": "91b5ba295f774396812f197398b2921f"
 		}
 	],
 	// "r2_buckets": [
@@ -27,6 +28,9 @@
 	],
 	"triggers": {
 		"crons": ["0 6 * * *"]
+	},
+	"vars": {
+		"ENVIRONMENT": "production"
 	},
 	// "ai": {
 	//   "binding": "AI"

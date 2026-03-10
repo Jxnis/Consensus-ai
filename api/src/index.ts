@@ -64,6 +64,19 @@ async function incrementMetric(kv: KVNamespace, key: string): Promise<void> {
   await addMetricNumber(kv, key, 1);
 }
 
+function rankComplexity(tier: "SIMPLE" | "MEDIUM" | "COMPLEX"): number {
+  if (tier === "COMPLEX") return 3;
+  if (tier === "MEDIUM") return 2;
+  return 1;
+}
+
+function maxComplexityTier(
+  a: "SIMPLE" | "MEDIUM" | "COMPLEX",
+  b: "SIMPLE" | "MEDIUM" | "COMPLEX"
+): "SIMPLE" | "MEDIUM" | "COMPLEX" {
+  return rankComplexity(a) >= rankComplexity(b) ? a : b;
+}
+
 function getChargedPriceUsd(authTier: string, budget: string, complexityTier: string): number {
   if (authTier === "paid") return 0.002;
 
@@ -82,16 +95,18 @@ function getChargedPriceUsd(authTier: string, budget: string, complexityTier: st
 
 // API Key Authentication Middleware (runs before x402)
 app.use("/v1/*", async (c, next) => {
-  // Localhost bypass for local development and benchmarking
+  // Localhost bypass is allowed only in explicit local/development environments.
   const url = new URL(c.req.url);
   const host = c.req.header("host") || "";
+  const environment = (c.env.ENVIRONMENT || "production").toLowerCase();
+  const isLocalEnvironment = environment === "development" || environment === "local";
   const isLocalhost =
     url.hostname === "localhost" ||
     url.hostname === "127.0.0.1" ||
     host.includes("localhost") ||
     host.includes("127.0.0.1");
 
-  if (isLocalhost) {
+  if (isLocalEnvironment && isLocalhost) {
     c.set("authTier" as never, "paid" as never);
     c.set("userId" as never, "local-dev" as never);
     return await next();
@@ -152,7 +167,7 @@ app.use("/v1/*", async (c, next) => {
     const userId = (c.get("userId" as never) as string) || clientIP;
 
     const limits: Record<string, number> = {
-      free: 200,   // TEMP: raised for benchmarking — restore to 20 after Feb 25
+      free: 20,
       playground: 50,
       paid: 1000,
     };
@@ -183,41 +198,55 @@ app.use("/v1/*", async (c, next) => {
 // Hybrid Middleware: Parse body, score prompt, apply dynamic x402 pricing
 app.use("/v1/chat/completions", async (c, next) => {
   const authTier = c.get("authTier" as never) as string | undefined;
+  const isAuthenticated = authTier === "paid" || authTier === "playground";
+  const maxBodySize = isAuthenticated ? 512000 : 51200;
 
-  // Already authenticated via API key → bypass x402
-  if (authTier === "paid" || authTier === "playground") {
-    return await next();
-  }
-
-  // Parse body once, extract prompt, score complexity
+  // Parse body once and enforce tier-specific size limits before reaching handlers.
   let budget = "";
-  let complexityTier: "SIMPLE" | "MEDIUM" | "COMPLEX" = "MEDIUM"; // default
+  let complexityTier: "SIMPLE" | "MEDIUM" | "COMPLEX" = "MEDIUM";
+  let body: Record<string, unknown>;
 
   try {
     const rawBody = await c.req.raw.clone().text();
 
-    if (rawBody.length > 51200) { // 50KB limit
-      return c.json({ error: "Request body too large. Maximum 50KB." }, 413);
+    if (rawBody.length > maxBodySize) {
+      return c.json({ error: `Request body too large. Maximum ${maxBodySize / 1024}KB.` }, 413);
     }
 
-    const body = JSON.parse(rawBody);
+    body = JSON.parse(rawBody);
     budget = String(body.budget ?? "").toLowerCase();
 
-    // Extract prompt and score complexity for dynamic pricing
-    const messages = body.messages as Array<{role: string; content: string}> | undefined;
-    const prompt = messages?.[messages.length - 1]?.content || "";
+    const messages = Array.isArray(body.messages)
+      ? (body.messages as Array<{ role: string; content?: unknown }>)
+      : [];
+    const fullConversation = messages
+      .map((m) => (typeof m.content === "string" ? m.content : ""))
+      .join(" ");
+    const totalTokenEstimate = Math.ceil(fullConversation.length / 4);
+    const lastMessage = typeof messages[messages.length - 1]?.content === "string"
+      ? (messages[messages.length - 1]!.content as string)
+      : "";
 
-    if (prompt && typeof prompt === "string") {
-      const complexity = scorePrompt(prompt);
-      complexityTier = complexity.tier;
+    if (lastMessage) {
+      complexityTier = scorePrompt(lastMessage).tier;
     }
 
-    // Store parsed body and complexity in context to avoid re-parsing/re-scoring
+    // Never downgrade complexity for large total-context requests.
+    if (totalTokenEstimate > 4000) {
+      complexityTier = "COMPLEX";
+    } else if (totalTokenEstimate > 1000) {
+      complexityTier = maxComplexityTier(complexityTier, "MEDIUM");
+    }
+
     c.set("parsedBody" as never, body as never);
     c.set("complexityTier" as never, complexityTier as never);
   } catch {
-    // JSON parse error or empty body — treat as free tier
-    budget = "free";
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  // Already authenticated via API key → bypass x402
+  if (isAuthenticated) {
+    return await next();
   }
 
   // Body parsing and complexity scoring completed above.
@@ -335,12 +364,27 @@ app.post("/v1/chat/completions", async (c) => {
     reliability: (body.reliability === "high" ? "high" : "standard"),
     mode,
   };
+  const wantsStream = body.stream === true;
+  const dayKey = getUtcDayKey();
+  const metricsPrefix = `metrics:${dayKey}`;
+
+  // Global request counters for all modes.
+  try {
+    await Promise.all([
+      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_total`),
+      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:${authTier}`),
+      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_mode:${mode}`),
+      wantsStream
+        ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:stream_requests`)
+        : Promise.resolve(),
+    ]);
+  } catch (kvErr) {
+    console.error("[Metrics] Request counter write failed (non-critical):", kvErr instanceof Error ? kvErr.message : String(kvErr));
+  }
 
   // TASK-P4.10, P4.11, P4.13, P4.15, P4.16: Smart Routing with Circuit Breaker and Failover
   // Uses D1 database for model selection, supports streaming, automatic failover
   if (mode === "default") {
-    const wantsStream = body.stream === true;
-
     // Detect topic with detailed detection
     const topicDetection = detectTopicDetailed(sanitizedPrompt);
     const topic = topicDetection.secondary || topicDetection.primary;
@@ -438,6 +482,7 @@ app.post("/v1/chat/completions", async (c) => {
 
     if (healthyModels.length === 0) {
       console.error('[Smart Router] All candidate models are circuit-broken!');
+      c.executionCtx.waitUntil(incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`));
       return c.json({
         error: 'All models unavailable',
         message: 'All candidate models are currently failing. Please try again later.',
@@ -479,31 +524,6 @@ app.post("/v1/chat/completions", async (c) => {
             stream: true,
           });
 
-          const latency = Date.now() - startTime;
-
-          // Note: We record success AFTER stream completes, not here
-          // If we record success now and the stream dies mid-way, the circuit breaker won't detect it
-
-          // Log routing decision (async, don't block response)
-          if (c.env.SCORE_DB) {
-            const { logRoutingDecision } = await import('./router/routing-history');
-            c.executionCtx.waitUntil(
-              logRoutingDecision(c.env.SCORE_DB, {
-                request_id: requestId,
-                topic,
-                topic_confidence: topicDetection.confidence,
-                complexity: complexity.tier,
-                budget: request.budget || 'medium',
-                selected_model: model.id,
-                data_source: dataSource,
-                latency_ms: latency,
-                success: true,
-                failover_count: failoverCount,
-                created_at: new Date().toISOString(),
-              })
-            );
-          }
-
           const encoder = new TextEncoder();
           const readable = new ReadableStream({
             async start(controller) {
@@ -514,17 +534,62 @@ app.post("/v1/chat/completions", async (c) => {
                 controller.enqueue(encoder.encode('data: [DONE]\n\n'));
                 controller.close();
 
-                // Record success HERE, when stream actually completes (not when it opens)
-                circuitBreaker.recordSuccess(model.id); // fire-and-forget, don't await
+                const totalLatency = Date.now() - startTime;
 
-                // Record success telemetry
-                c.executionCtx.waitUntil(telemetry.record(model.id, Date.now() - startTime, true));
+                const logSuccess = async () => {
+                  if (!c.env.SCORE_DB) return;
+                  const { logRoutingDecision } = await import('./router/routing-history');
+                  await logRoutingDecision(c.env.SCORE_DB, {
+                    request_id: requestId,
+                    topic,
+                    topic_confidence: topicDetection.confidence,
+                    complexity: complexity.tier,
+                    budget: request.budget || 'medium',
+                    selected_model: model.id,
+                    data_source: dataSource,
+                    latency_ms: totalLatency,
+                    success: true,
+                    failover_count: failoverCount,
+                    created_at: new Date().toISOString(),
+                  });
+                };
+
+                c.executionCtx.waitUntil(Promise.all([
+                  circuitBreaker.recordSuccess(model.id),
+                  telemetry.record(model.id, totalLatency, true),
+                  addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_sum_ms`, totalLatency),
+                  incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_count`),
+                  logSuccess(),
+                ]));
               } catch (streamErr) {
                 console.error('[Smart Router] Stream error:', streamErr);
                 // Stream already started, can't fail over now
-                circuitBreaker.recordFailure(model.id); // fire-and-forget
-                // Record failure in telemetry
-                c.executionCtx.waitUntil(telemetry.record(model.id, Date.now() - startTime, false));
+                const totalLatency = Date.now() - startTime;
+
+                const logFailure = async () => {
+                  if (!c.env.SCORE_DB) return;
+                  const { logRoutingDecision } = await import('./router/routing-history');
+                  await logRoutingDecision(c.env.SCORE_DB, {
+                    request_id: requestId,
+                    topic,
+                    topic_confidence: topicDetection.confidence,
+                    complexity: complexity.tier,
+                    budget: request.budget || 'medium',
+                    selected_model: model.id,
+                    data_source: dataSource,
+                    latency_ms: totalLatency,
+                    success: false,
+                    failover_count: failoverCount,
+                    created_at: new Date().toISOString(),
+                  });
+                };
+
+                c.executionCtx.waitUntil(Promise.all([
+                  circuitBreaker.recordFailure(model.id),
+                  telemetry.record(model.id, totalLatency, false),
+                  incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`),
+                  logFailure(),
+                ]));
                 controller.error(streamErr);
               }
             },
@@ -559,6 +624,10 @@ app.post("/v1/chat/completions", async (c) => {
 
           // Record telemetry (async, don't block response)
           c.executionCtx.waitUntil(telemetry.record(model.id, latency, true));
+          c.executionCtx.waitUntil(Promise.all([
+            addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_sum_ms`, latency),
+            incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_count`),
+          ]));
 
           // Log routing decision (async, don't block response)
           if (c.env.SCORE_DB) {
@@ -638,29 +707,13 @@ app.post("/v1/chat/completions", async (c) => {
       );
     }
 
+    c.executionCtx.waitUntil(incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`));
     return c.json({
       error: 'All models failed',
       message: lastError?.message || 'Failed to call any model in failover chain',
       failover_count: failoverCount,
       request_id: requestId,
     }, 502);
-  }
-
-  const wantsStream = body.stream === true;
-  const dayKey = getUtcDayKey();
-  const metricsPrefix = `metrics:${dayKey}`;
-
-  // 52a: daily counters by requests + tier
-  try {
-    await Promise.all([
-      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_total`),
-      incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:${authTier}`),
-      wantsStream
-        ? incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:stream_requests`)
-        : Promise.resolve(),
-    ]);
-  } catch (kvErr) {
-    console.error('[Metrics] KV write failed (non-critical):', kvErr instanceof Error ? kvErr.message : String(kvErr));
   }
 
   try {
@@ -868,10 +921,14 @@ app.get("/", (c) => {
     version: "1.0.0",
     docs: "https://councilrouter.ai/docs",
     tiers: {
-      free: "No auth required. Free models only, 20 req/hour.",
+      free: "No API key required. Free-tier models only, 20 requests/hour.",
       paid: "API key required. All budget tiers, Stripe metered billing, $0.002 per request.",
       x402: "USDC payment on Base Mainnet. Variable pricing: $0.001 (simple), $0.002 (medium), $0.005 (complex)."
-    }
+    },
+    modes: {
+      default: "Smart routing to the best single model from benchmark scores.",
+      council: "Multi-model consensus and confidence scoring.",
+    },
   });
 });
 
@@ -980,6 +1037,8 @@ app.get("/admin/stats", async (c) => {
     paidRequests,
     cacheHitCount,
     cacheMissCount,
+    defaultModeRequests,
+    councilModeRequests,
   ] = await Promise.all([
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_total`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`),
@@ -1003,6 +1062,8 @@ app.get("/admin/stats", async (c) => {
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:paid`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cache_hit`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cache_miss`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_mode:default`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_mode:council`),
   ]);
 
   const avgConfidence = confidenceCount > 0 ? confidenceSum / confidenceCount : 0;
@@ -1031,6 +1092,10 @@ app.get("/admin/stats", async (c) => {
         free: freeRequests,
         playground: playgroundRequests,
         paid: paidRequests,
+      },
+      by_mode: {
+        default: defaultModeRequests,
+        council: councilModeRequests,
       },
     },
     cost: {
@@ -1135,6 +1200,37 @@ app.post("/admin/sync-livebench", async (c) => {
   } catch (err) {
     return c.json({
       error: "LiveBench sync failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Sync LiveCodeBench coding scores (requires admin auth)
+app.post("/admin/sync-livecodebench", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { scrapeLiveCodeBench } = await import("./db/scrapers/livecodebench");
+    const result = await scrapeLiveCodeBench(c.env.SCORE_DB);
+
+    return c.json({
+      success: true,
+      updated: result.updated,
+      errors: result.errors,
+    });
+  } catch (err) {
+    return c.json({
+      error: "LiveCodeBench sync failed",
       message: err instanceof Error ? err.message : String(err),
     }, 500);
   }
@@ -1246,16 +1342,20 @@ export default {
       const { scrapeLiveBench } = await import('./db/scrapers/livebench');
       await scrapeLiveBench(env.SCORE_DB);
 
-      // 4. Flush telemetry data from KV to D1
+      // 4. Sync LiveCodeBench coding scores
+      const { scrapeLiveCodeBench } = await import('./db/scrapers/livecodebench');
+      await scrapeLiveCodeBench(env.SCORE_DB);
+
+      // 5. Flush telemetry data from KV to D1
       const { RoutingTelemetry } = await import('./router/telemetry');
       const telemetry = new RoutingTelemetry(env.CONSENSUS_CACHE);
       await telemetry.flushToD1(env.SCORE_DB);
 
-      // 5. Recalculate composite scores (already done by each scraper, but doing once more at the end ensures consistency)
+      // 6. Recalculate composite scores (once after all scrapers finish)
       const { recalculateScores } = await import('./db/score-calculator');
       await recalculateScores(env.SCORE_DB);
 
-      // 6. Invalidate route cache (scores changed, cached routes may be stale)
+      // 7. Invalidate route cache (scores changed, cached routes may be stale)
       const { RouteCache } = await import('./router/route-cache');
       const routeCache = new RouteCache(env.CONSENSUS_CACHE);
       await routeCache.invalidateAll();

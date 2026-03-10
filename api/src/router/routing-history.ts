@@ -79,53 +79,56 @@ export async function getRoutingStats(
   success_rate: number;
 }> {
   try {
+    const whereClause = since ? "WHERE created_at >= ?" : "";
+    const bindings = since ? [since] : [];
+
     // Total requests
-    const totalResult = since
-      ? await db.prepare(`SELECT COUNT(*) as count FROM routing_history WHERE created_at >= ?`).bind(since).first<{ count: number }>()
-      : await db.prepare(`SELECT COUNT(*) as count FROM routing_history`).first<{ count: number }>();
+    const totalResult = await db
+      .prepare(`SELECT COUNT(*) as count FROM routing_history ${whereClause}`)
+      .bind(...bindings)
+      .first<{ count: number }>();
     const total = totalResult?.count || 0;
 
     // By topic
-    const topicResults = since
-      ? await db.prepare(`SELECT topic, COUNT(*) as count FROM routing_history WHERE created_at >= ? GROUP BY topic ORDER BY count DESC LIMIT 20`).bind(since).all<{ topic: string; count: number }>()
-      : await db.prepare(`SELECT topic, COUNT(*) as count FROM routing_history GROUP BY topic ORDER BY count DESC LIMIT 20`).all<{ topic: string; count: number }>();
+    const topicResults = await db
+      .prepare(`SELECT topic, COUNT(*) as count FROM routing_history ${whereClause} GROUP BY topic ORDER BY count DESC LIMIT 20`)
+      .bind(...bindings)
+      .all<{ topic: string; count: number }>();
     const byTopic: Record<string, number> = {};
     for (const row of topicResults.results || []) {
       byTopic[row.topic] = row.count;
     }
 
     // By model
-    const modelResults = since
-      ? await db.prepare(`SELECT selected_model, COUNT(*) as count FROM routing_history WHERE created_at >= ? GROUP BY selected_model ORDER BY count DESC LIMIT 20`).bind(since).all<{ selected_model: string; count: number }>()
-      : await db.prepare(`SELECT selected_model, COUNT(*) as count FROM routing_history GROUP BY selected_model ORDER BY count DESC LIMIT 20`).all<{ selected_model: string; count: number }>();
+    const modelResults = await db
+      .prepare(`SELECT selected_model, COUNT(*) as count FROM routing_history ${whereClause} GROUP BY selected_model ORDER BY count DESC LIMIT 20`)
+      .bind(...bindings)
+      .all<{ selected_model: string; count: number }>();
     const byModel: Record<string, number> = {};
     for (const row of modelResults.results || []) {
       byModel[row.selected_model] = row.count;
     }
 
     // By data source
-    const sourceResults = since
-      ? await db.prepare(`SELECT data_source, COUNT(*) as count FROM routing_history WHERE created_at >= ? GROUP BY data_source`).bind(since).all<{ data_source: string; count: number }>()
-      : await db.prepare(`SELECT data_source, COUNT(*) as count FROM routing_history GROUP BY data_source`).all<{ data_source: string; count: number }>();
+    const sourceResults = await db
+      .prepare(`SELECT data_source, COUNT(*) as count FROM routing_history ${whereClause} GROUP BY data_source`)
+      .bind(...bindings)
+      .all<{ data_source: string; count: number }>();
     const byDataSource: Record<string, number> = {};
     for (const row of sourceResults.results || []) {
       byDataSource[row.data_source] = row.count;
     }
 
     // Avg failover count and success rate
-    const statsResult = since
-      ? await db.prepare(`
+    const statsResult = await db
+      .prepare(`
         SELECT
           AVG(failover_count) as avg_failover,
           SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate
-        FROM routing_history WHERE created_at >= ?
-      `).bind(since).first<{ avg_failover: number; success_rate: number }>()
-      : await db.prepare(`
-        SELECT
-          AVG(failover_count) as avg_failover,
-          SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate
-        FROM routing_history
-      `).first<{ avg_failover: number; success_rate: number }>();
+        FROM routing_history ${whereClause}
+      `)
+      .bind(...bindings)
+      .first<{ avg_failover: number; success_rate: number }>();
 
     return {
       total_requests: total,
