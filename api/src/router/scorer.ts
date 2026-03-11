@@ -82,6 +82,8 @@ const TOP_LEVEL_MARKERS = {
     /\b(typescript|python|javascript|react|vue|angular|rust|go|java|c\+\+|ruby|php)\b/i,
     // Code-specific terms
     /\b(API|endpoint|SQL|query|database|server|frontend|backend|docker|kubernetes)\b/i,
+    // CS/algorithm theory terms
+    /\b(time complexity|space complexity|big[\s-]?o|O\(n|O\(log|merge sort|quicksort|binary search|hash\s?map|linked list|data structure)\b/i,
     // Syntax indicators
     /[{}\[\]();]/, // brackets/semicolons suggest code
     /```/, // markdown code blocks
@@ -108,6 +110,8 @@ const TOP_LEVEL_MARKERS = {
     /\b(physics|force|energy|motion|velocity|acceleration|gravity|newton|mass|momentum|friction)\b/i,
     /\b(quantum|electron|photon|atom|nuclear|radiation|electromagnetic|wave|particle)\b/i,
     /\b(thermodynamic|heat|temperature|pressure|relativity|mechanics)\b/i,
+    // Physics concepts (named principles/effects)
+    /\b(Heisenberg|Schrodinger|Schrödinger|uncertainty principle|entanglement|superposition|Bohr|Planck)\b/i,
     // Chemistry - EXPANDED
     /\b(chemistry|molecule|element|compound|reaction|chemical|bond|catalyst|acid|base|ion)\b/i,
     /\b(periodic table|valence|oxidation|synthesis|solvent|solution)\b/i,
@@ -115,6 +119,8 @@ const TOP_LEVEL_MARKERS = {
     /\b(biology|cell|DNA|RNA|gene|protein|enzyme|organism|species|evolution)\b/i,
     /\b(photosynthesis|respiration|mitosis|meiosis|chromosome|inheritance|ecosystem)\b/i,
     /\b(bacteria|virus|infection|immune|vaccine|antibody|tissue|organ)\b/i,
+    // Astronomy/space
+    /\b(black hole|star|galaxy|universe|cosmic|nebula|supernova|dark matter|dark energy|solar system|asteroid|comet)\b/i,
     // General science terms
     /\b(experiment|hypothesis|theory|scientific method|observation|data|measurement)\b/i,
     /\b(climate|atmosphere|earth|geology|earthquake|volcano|ocean|planet)\b/i,
@@ -128,8 +134,12 @@ const TOP_LEVEL_MARKERS = {
     /\b(logic|puzzle|deduce|infer|strategy|plan|optimize|multi-step|reasoning|syllogism)\b/i,
     /\b(if.*then|premise|conclusion|argument|fallacy|contradict|valid|invalid)\b/i,
     /\b(problem.?solving|critical thinking|decision|workflow|sequence|stages|process)\b/i,
-    /\ball\s+(a|b|c|x|y|z)\s+are/i,  // Logical statements like "all A are B"
+    /\ball\s+\w+\s+are\s+\w+/i,  // Logical statements like "all cats are animals"
     /\bgiven.*premises?\b/i,  // Premise-based reasoning
+    /\b(pros?\s+and\s+cons?|advantages?\s+and\s+disadvantages?|compare\s+and\s+contrast|trade.?offs?)\b/i,
+    /\b(analyze|evaluate|assess)\s+(the\s+)?(pros|benefits|arguments|implications|impact)\b/i,
+    /\bwhat\s+(can|do)\s+we\s+(conclude|infer|deduce)\b/i,
+    /\b(logical|reasoning)\s+(fallacy|error|flaw)\b/i,
   ],
 };
 
@@ -223,7 +233,7 @@ export function detectTopicDetailed(prompt: string): TopicDetectionResult {
   }
 
   // Boost science for explicit science questions that might be misclassified as general
-  if (/\b(explain|describe|what is|how does|why does)\b.*\b(physics|chemistry|biology|science|scientific)\b/i.test(prompt)) {
+  if (/\b(explain|describe|what is|how does|why does|how do)\b.*\b(physics|chemistry|biology|science|scientific|quantum|atom|molecule|cell|gene|black hole|star|galaxy|planet|gravity|evolution|photosynthesis|DNA|RNA|electron|proton|neutron)\b/i.test(prompt)) {
     topLevelScores.science += 15;
   }
 

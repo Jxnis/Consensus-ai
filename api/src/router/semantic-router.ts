@@ -30,7 +30,7 @@ export interface ModelEmbedding {
   reference_text: string;
 }
 
-const SEMANTIC_TIMEOUT_MS = 50;
+const SEMANTIC_TIMEOUT_MS = 2000; // 2s timeout (was 50ms, too aggressive)
 const SHORTLIST_SIZE = 10;
 const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
 const EMBEDDING_VERSION = 'v1';
@@ -86,13 +86,12 @@ export class SemanticRouter {
       const queryEmbedding = await this.embedWithTimeout(query, SEMANTIC_TIMEOUT_MS);
 
       // Step 3: Load model embeddings for shortlist
-      const modelEmbeddings = await this.getModelEmbeddings(
-        shortlist.map(m => m.model_id),
-        domain
-      );
+      const shortlistIds = shortlist.map(m => m.model_id);
+
+      const modelEmbeddings = await this.getModelEmbeddings(shortlistIds, domain);
 
       if (modelEmbeddings.length === 0) {
-        throw new Error('No model embeddings found for shortlist');
+        throw new Error(`No model embeddings found for shortlist (domain=${domain}, models=${shortlistIds.length})`);
       }
 
       // Step 4: Compute cosine similarities
@@ -246,13 +245,57 @@ export class SemanticRouter {
       .bind(...modelIds, domain, EMBEDDING_VERSION)
       .all();
 
-    if (!result.results) return [];
+    if (!result.results || result.results.length === 0) {
+      return [];
+    }
 
-    return result.results.map(row => ({
-      model_id: row.model_id as string,
-      embedding: new Float32Array(row.embedding as ArrayBuffer),
-      reference_text: row.reference_text as string,
-    }));
+    return result.results.map(row => {
+      // D1 returns BLOBs in various formats depending on runtime context.
+      // In Cloudflare Workers production, it's often an ArrayBuffer-like object
+      // that doesn't pass instanceof checks. We need to handle all cases.
+      const rawEmbedding = row.embedding as any;
+      let floatArray: Float32Array;
+
+      try {
+        if (rawEmbedding instanceof Float32Array) {
+          floatArray = rawEmbedding;
+        } else if (rawEmbedding instanceof ArrayBuffer) {
+          floatArray = new Float32Array(rawEmbedding);
+        } else if (ArrayBuffer.isView(rawEmbedding)) {
+          floatArray = new Float32Array(
+            rawEmbedding.buffer,
+            rawEmbedding.byteOffset,
+            rawEmbedding.byteLength / 4
+          );
+        } else if (rawEmbedding && typeof rawEmbedding === 'object') {
+          // D1 returns BLOBs as plain JavaScript Array of byte values in production.
+          // Each element is a number 0-255 representing one byte.
+          // 768 floats × 4 bytes = 3072 byte values in the array.
+          if (Array.isArray(rawEmbedding) && rawEmbedding.length > 0) {
+            const byteArray = new Uint8Array(rawEmbedding);
+            floatArray = new Float32Array(byteArray.buffer);
+          } else if (rawEmbedding.byteLength !== undefined) {
+            const byteArray = new Uint8Array(rawEmbedding);
+            floatArray = new Float32Array(byteArray.buffer);
+          } else {
+            console.error(`[SemanticRouter] Cannot convert embedding for ${row.model_id}: constructor=${rawEmbedding.constructor?.name}`);
+            return null;
+          }
+        } else {
+          console.error(`[SemanticRouter] Unexpected embedding type: ${typeof rawEmbedding} for ${row.model_id}`);
+          return null;
+        }
+      } catch (convErr) {
+        console.error(`[SemanticRouter] Embedding conversion error for ${row.model_id}: ${convErr instanceof Error ? convErr.message : convErr}`);
+        return null;
+      }
+
+      return {
+        model_id: row.model_id as string,
+        embedding: floatArray,
+        reference_text: row.reference_text as string,
+      };
+    }).filter(Boolean) as ModelEmbedding[];
   }
 
   /**
