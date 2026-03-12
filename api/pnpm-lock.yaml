@@ -23,6 +23,9 @@ importers:
       openai:
         specifier: ^4.76.0
         version: 4.104.0(ws@8.18.3)(zod@4.3.6)
+      stripe:
+        specifier: ^20.4.1
+        version: 20.4.1(@types/node@22.19.10)
       viem:
         specifier: ^2.38.6
         version: 2.45.2(zod@4.3.6)
@@ -744,6 +747,15 @@ packages:
     resolution: {integrity: sha512-aSf+6+Latyttbj5nMu6GF3doMfv2UYj83hhwZgUF20ky6fTS83uVhkQABdIVnEuS8y1bBdk7p6ltb9SmlhTTlA==}
     peerDependencies:
       ethers: ^5.6.8 || ^6.0.8
+
+  stripe@20.4.1:
+    resolution: {integrity: sha512-axCguHItc8Sxt0HC6aSkdVRPffjYPV7EQqZRb2GkIa8FzWDycE7nHJM19C6xAIynH1Qp1/BHiopSi96jGBxT0w==}
+    engines: {node: '>=16'}
+    peerDependencies:
+      '@types/node': '>=16'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   supports-color@10.2.2:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
@@ -1519,6 +1531,10 @@ snapshots:
       ethers: 6.16.0
       uri-js: 4.4.1
       valid-url: 1.0.9
+
+  stripe@20.4.1(@types/node@22.19.10):
+    optionalDependencies:
+      '@types/node': 22.19.10
 
   supports-color@10.2.2: {}
 

@@ -67,4 +67,8 @@ export interface CloudflareBindings {
   AI: any; // Workers AI binding
   ENVIRONMENT?: string;
   SEMANTIC_ROUTING_ENABLED?: string; // Feature flag: 'true' | 'false'
+  // Stripe integration (optional)
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_PRICE_ID?: string;
 }

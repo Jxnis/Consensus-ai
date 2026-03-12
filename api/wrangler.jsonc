@@ -44,5 +44,9 @@
 	// - OPENROUTER_API_KEY: Your OpenRouter API key
 	// - ADMIN_TOKEN: Secret for /admin/create-key endpoint
 	// - X402_WALLET_ADDRESS: Base Mainnet wallet for x402 payments
+	// - STRIPE_SECRET_KEY: Stripe secret key (sk_live_... or sk_test_...)
+	// - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret (whsec_...)
+	// - STRIPE_PRICE_ID: Stripe metered price ID (price_...)
 	// NOTE: X402_WALLET_ADDRESS must be a secret, NOT a var, to prevent zero-address fallback
+	// NOTE: Stripe secrets are optional - only required if enabling Stripe billing
 }

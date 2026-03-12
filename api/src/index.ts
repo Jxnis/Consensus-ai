@@ -121,6 +121,8 @@ app.use("/v1/*", async (c, next) => {
       userId: string;
       tier: "paid" | "playground";
       stripeSubscriptionId?: string;
+      subscriptionItemId?: string;
+      status?: string;
     } | null;
 
     // Backward-compatible lookup for previously stored plaintext keys (migration path).
@@ -129,6 +131,8 @@ app.use("/v1/*", async (c, next) => {
         userId: string;
         tier: "paid" | "playground";
         stripeSubscriptionId?: string;
+        subscriptionItemId?: string;
+        status?: string;
       } | null;
 
       if (legacyKeyData) {
@@ -143,9 +147,18 @@ app.use("/v1/*", async (c, next) => {
     }
 
     if (keyData) {
-      c.set("authTier" as never, keyData.tier as never);
+      // Check subscription status if paid tier
+      if (keyData.tier === "paid" && keyData.status && keyData.status !== "active") {
+        // Subscription is past_due or canceled - downgrade to free
+        console.log(`[Auth] Subscription ${keyData.status} for user ${keyData.userId}, downgrading to free`);
+        c.set("authTier" as never, "free" as never);
+      } else {
+        c.set("authTier" as never, keyData.tier as never);
+      }
+
       c.set("userId" as never, keyData.userId as never);
       c.set("stripeSubscriptionId" as never, keyData.stripeSubscriptionId as never);
+      c.set("subscriptionItemId" as never, keyData.subscriptionItemId as never);
       return await next();
     } else {
       return c.json({ error: "Invalid API key" }, 401);
@@ -813,13 +826,16 @@ app.post("/v1/chat/completions", async (c) => {
       console.error('[Metrics] Post-consensus KV write failed (non-critical):', kvErr instanceof Error ? kvErr.message : String(kvErr));
     }
 
-    // Track Stripe usage for paid tier
-    const stripeSubscriptionId = c.get("stripeSubscriptionId" as never) as string | undefined;
-    if (authTier === "paid" && stripeSubscriptionId) {
-      const usageKey = `stripe:usage:${stripeSubscriptionId}:${new Date().toISOString().slice(0, 10)}`;
-      const currentUsage = await c.env.CONSENSUS_CACHE.get(usageKey);
-      const newUsage = (parseInt(currentUsage || "0") + 1).toString();
-      await c.env.CONSENSUS_CACHE.put(usageKey, newUsage, { expirationTtl: 86400 * 7 });
+    // Report metered usage to Stripe for paid tier
+    const subscriptionItemId = c.get("subscriptionItemId" as never) as string | undefined;
+    if (authTier === "paid" && subscriptionItemId && c.env.STRIPE_SECRET_KEY) {
+      // Report usage asynchronously (don't block response)
+      c.executionCtx.waitUntil(
+        (async () => {
+          const { reportUsage } = await import("./payments/stripe");
+          await reportUsage(c.env.STRIPE_SECRET_KEY, subscriptionItemId, 1);
+        })()
+      );
     }
 
     // --- SSE Streaming path ---
@@ -1397,6 +1413,24 @@ app.post("/admin/invalidate-cache", async (c) => {
       message: err instanceof Error ? err.message : String(err),
     }, 500);
   }
+});
+
+// Stripe: Create checkout session
+app.post("/api/stripe/create-checkout", async (c) => {
+  const { createCheckoutSession } = await import("./payments/stripe");
+  return await createCheckoutSession(c);
+});
+
+// Stripe: Create customer portal session
+app.post("/api/stripe/portal", async (c) => {
+  const { createPortalSession } = await import("./payments/stripe");
+  return await createPortalSession(c);
+});
+
+// Stripe: Webhook handler
+app.post("/api/stripe/webhook", async (c) => {
+  const { handleWebhook } = await import("./payments/stripe");
+  return await handleWebhook(c);
 });
 
 // Admin: Database health check (requires admin auth)
