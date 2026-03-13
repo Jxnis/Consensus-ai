@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import CouncilLogo from "@/components/CouncilLogo";
+import ArcLogo from "@/components/ArcLogo";
 import { ArrowRight, Menu, X, ChevronUp, ChevronDown, Search } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://consensus-api.janis-ellerbrock.workers.dev";
@@ -217,8 +217,8 @@ export default function RankingsPage() {
         <aside className="hidden lg:flex w-64 flex-col border-r border-border fixed h-screen top-0 left-0 bg-background/95 backdrop-blur-sm z-30">
           <div className="p-6 border-b border-border">
             <a href="/" className="flex items-center gap-3 group">
-              <CouncilLogo className="w-6 h-6 text-foreground transition-transform duration-500 group-hover:rotate-180" />
-              <span className="font-heading font-bold text-lg tracking-tight text-foreground">CouncilRouter</span>
+              <ArcLogo className="w-6 h-6 text-foreground transition-transform duration-500 group-hover:rotate-180" />
+              <span className="font-heading font-bold text-lg tracking-tight text-foreground">ArcRouter</span>
             </a>
           </div>
           <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
@@ -306,8 +306,8 @@ export default function RankingsPage() {
         {/* Mobile Header */}
         <div className="lg:hidden fixed top-0 w-full z-40 bg-background/80 backdrop-blur-md border-b border-border p-4 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2">
-            <CouncilLogo className="w-5 h-5 text-foreground" />
-            <span className="font-heading font-bold text-sm text-foreground">CouncilRouter</span>
+            <ArcLogo className="w-5 h-5 text-foreground" />
+            <span className="font-heading font-bold text-sm text-foreground">ArcRouter</span>
           </a>
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -549,7 +549,7 @@ export default function RankingsPage() {
                 </div>
 
                 <div className="border-l-2 border-purple-500 pl-6">
-                  <h3 className="font-heading text-lg text-foreground mb-2">How CouncilRouter Uses These Scores</h3>
+                  <h3 className="font-heading text-lg text-foreground mb-2">How ArcRouter Uses These Scores</h3>
                   <p className="text-sm text-muted-foreground">
                     When you send a query, our semantic routing engine detects the topic, queries the benchmark database for the best-scoring models in that domain, and uses embedding-based reranking to select the optimal model. This means your math question goes to the best math model, your code question goes to the best code model — automatically, at the lowest cost.
                   </p>

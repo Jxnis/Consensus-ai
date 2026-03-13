@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 
-const words = ["Route", "smarter.", "Benchmark", "verified."];
+const words = ["Route", "smarter.", "Pay", "less."];
 
 const HeroNew = () => {
   return (
@@ -27,7 +27,7 @@ const HeroNew = () => {
         >
           <p className="font-mono text-[11px] leading-relaxed text-muted-foreground max-w-md tracking-wide">
             Auto-route any prompt to the best AI model based on real benchmark scores.
-            Topic detection across 24 categories. Daily updates from HuggingFace, LiveBench, GPQA.
+            Same quality as GPT-4o at up to 90% lower cost. 340+ models, 24 topic categories, daily updates.
           </p>
 
           <div className="flex items-center gap-4">

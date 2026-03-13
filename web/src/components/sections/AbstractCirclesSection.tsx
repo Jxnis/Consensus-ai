@@ -33,7 +33,7 @@ const AbstractCirclesSection = () => {
           className="relative z-10 text-center max-w-2xl"
         >
           <h2 className="font-heading text-4xl md:text-6xl text-foreground tracking-[-0.03em] leading-[1.1]">
-            Multiple models verify so you don't have to.
+            Best model for every prompt. 90% cheaper.
           </h2>
         </motion.div>
       </div>

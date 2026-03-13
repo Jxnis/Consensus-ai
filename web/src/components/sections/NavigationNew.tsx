@@ -1,7 +1,7 @@
 import { useTheme } from "../ThemeProvider";
 import { Sun, Moon } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import CouncilLogo from "../CouncilLogo";
+import ArcLogo from "../ArcLogo";
 import { useEffect, useState } from "react";
 
 const navLinks = [
@@ -109,12 +109,12 @@ const NavigationNew = () => {
     >
       <div className="max-w-[1400px] mx-auto px-8 h-16 flex items-center justify-between">
         <a href="#" className="flex items-center gap-1 group">
-            <CouncilLogo className="w-12 h-12 text-foreground transition-transform duration-500 group-hover:rotate-180" />
+            <ArcLogo className="w-12 h-12 text-foreground transition-transform duration-500 group-hover:rotate-180" />
             
             <div className="font-heading font-bold text-lg tracking-tight flex items-center overflow-hidden h-6 min-w-[150px]">
               <AnimatedTitle 
-                initialText="CouncilRouter" 
-                finalText="CR" 
+                initialText="ArcRouter" 
+                finalText="AR" 
               />
             </div>
         </a>

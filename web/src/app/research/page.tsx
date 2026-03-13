@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import CouncilLogo from "@/components/CouncilLogo";
+import ArcLogo from "@/components/ArcLogo";
 import { ArrowRight, Menu, X, AlertCircle } from "lucide-react";
 
 const sections = [
@@ -34,8 +34,8 @@ export default function ResearchPage() {
         <aside className="hidden lg:flex w-64 flex-col border-r border-border fixed h-screen top-0 left-0 bg-background/95 backdrop-blur-sm z-30">
           <div className="p-6 border-b border-border">
             <a href="/" className="flex items-center gap-3 group">
-              <CouncilLogo className="w-6 h-6 text-foreground transition-transform duration-500 group-hover:rotate-180" />
-              <span className="font-heading font-bold text-lg tracking-tight text-foreground">CouncilRouter</span>
+              <ArcLogo className="w-6 h-6 text-foreground transition-transform duration-500 group-hover:rotate-180" />
+              <span className="font-heading font-bold text-lg tracking-tight text-foreground">ArcRouter</span>
             </a>
           </div>
           <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
@@ -66,8 +66,8 @@ export default function ResearchPage() {
         {/* Mobile Header */}
         <div className="lg:hidden fixed top-0 w-full z-40 bg-background/80 backdrop-blur-md border-b border-border p-4 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2">
-            <CouncilLogo className="w-5 h-5 text-foreground" />
-            <span className="font-heading font-bold text-sm text-foreground">CouncilRouter</span>
+            <ArcLogo className="w-5 h-5 text-foreground" />
+            <span className="font-heading font-bold text-sm text-foreground">ArcRouter</span>
           </a>
           <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -98,7 +98,7 @@ export default function ResearchPage() {
               <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-[0.2em] block">Research</span>
               <h1 className="font-heading text-4xl lg:text-5xl text-foreground tracking-tight">Scientific Benchmarks</h1>
               <p className="text-muted-foreground leading-relaxed max-w-2xl text-lg">
-                Rigorous evaluation of CouncilRouter's multi-model consensus approach against single-model baselines. All results are reproducible, auto-graded, and include statistical confidence intervals.
+                Rigorous evaluation of ArcRouter's multi-model consensus approach against single-model baselines. All results are reproducible, auto-graded, and include statistical confidence intervals.
               </p>
 
               {/* Status Note */}
@@ -187,7 +187,7 @@ export default function ResearchPage() {
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6 flex gap-4">
                 <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-muted-foreground">
-                  <strong className="text-foreground">Critical Finding:</strong> CouncilRouter Paid tier experienced <strong>100% API failure rate</strong> on 4/6 datasets (factual_hard, gsm8k_hard, mmlu_subset, humaneval_sample). All requests returned 500 Internal Server Error. Average shown only includes 2 successful datasets. This is a production blocker requiring investigation.
+                  <strong className="text-foreground">Critical Finding:</strong> ArcRouter Paid tier experienced <strong>100% API failure rate</strong> on 4/6 datasets (factual_hard, gsm8k_hard, mmlu_subset, humaneval_sample). All requests returned 500 Internal Server Error. Average shown only includes 2 successful datasets. This is a production blocker requiring investigation.
                 </div>
               </div>
             </section>
@@ -197,7 +197,7 @@ export default function ResearchPage() {
               <div>
                 <h2 className="font-heading text-2xl text-foreground mb-4">Quality per Dollar</h2>
                 <p className="text-muted-foreground mb-8">
-                  CouncilRouter free tier demonstrates the core thesis: cheap/free models with consensus can match or exceed expensive single models.
+                  ArcRouter free tier demonstrates the core thesis: cheap/free models with consensus can match or exceed expensive single models.
                 </p>
               </div>
 
@@ -214,7 +214,7 @@ export default function ResearchPage() {
                   </thead>
                   <tbody className="divide-y divide-border">
                     <tr className="bg-emerald-500/5">
-                      <td className="p-4 font-bold text-foreground">CouncilRouter Free</td>
+                      <td className="p-4 font-bold text-foreground">ArcRouter Free</td>
                       <td className="p-4 text-emerald-400 font-bold">88.6%</td>
                       <td className="p-4 text-muted-foreground">$0.000</td>
                       <td className="p-4 text-emerald-400 font-bold">∞</td>
@@ -232,7 +232,7 @@ export default function ResearchPage() {
                       <td className="p-4 text-muted-foreground">5,487</td>
                     </tr>
                     <tr className="opacity-50">
-                      <td className="p-4 text-muted-foreground italic">CouncilRouter Paid</td>
+                      <td className="p-4 text-muted-foreground italic">ArcRouter Paid</td>
                       <td className="p-4 text-red-400 italic">BROKEN</td>
                       <td className="p-4 text-muted-foreground">$0.002</td>
                       <td className="p-4 text-muted-foreground italic">—</td>
@@ -246,7 +246,7 @@ export default function ResearchPage() {
                   <div className="font-mono text-xs text-emerald-600 dark:text-emerald-400 mb-2">WINNER: HUMANEVAL</div>
                   <div className="font-heading text-3xl text-foreground mb-2">100%</div>
                   <p className="text-sm text-muted-foreground">
-                    CouncilRouter Free achieved <strong>100% accuracy</strong> on HumanEval code generation (10 problems), while GPT-4o-mini and Claude Opus both scored 50%.
+                    ArcRouter Free achieved <strong>100% accuracy</strong> on HumanEval code generation (10 problems), while GPT-4o-mini and Claude Opus both scored 50%.
                   </p>
                 </div>
 
@@ -254,7 +254,7 @@ export default function ResearchPage() {
                   <div className="font-mono text-xs text-blue-600 dark:text-blue-400 mb-2">FAILURE: MMLU</div>
                   <div className="font-heading text-3xl text-foreground mb-2">35.3%</div>
                   <p className="text-sm text-muted-foreground">
-                    All models struggled with MMLU STEM questions (50 MC questions). GPT-4o-mini won with 80%, while CouncilRouter Free and Claude Opus both underperformed (&lt;45%).
+                    All models struggled with MMLU STEM questions (50 MC questions). GPT-4o-mini won with 80%, while ArcRouter Free and Claude Opus both underperformed (&lt;45%).
                   </p>
                 </div>
               </div>
@@ -265,7 +265,7 @@ export default function ResearchPage() {
               <div>
                 <h2 className="font-heading text-2xl text-foreground mb-4">Confidence Calibration</h2>
                 <p className="text-muted-foreground mb-8">
-                  Calibration metrics measure whether CouncilRouter's confidence scores are trustworthy. Free tier data based on 127 completed test cases (45 failed due to API errors).
+                  Calibration metrics measure whether ArcRouter's confidence scores are trustworthy. Free tier data based on 127 completed test cases (45 failed due to API errors).
                 </p>
               </div>
 
@@ -364,8 +364,8 @@ export default function ResearchPage() {
                 <div className="border-l-2 border-purple-500 pl-6">
                   <h3 className="font-heading text-lg text-foreground mb-2">Model Configurations</h3>
                   <ul className="text-sm text-muted-foreground space-y-1">
-                    <li>• <strong className="text-foreground">CouncilRouter Free:</strong> 3-8 free models, Jaccard word-overlap consensus</li>
-                    <li>• <strong className="text-foreground">CouncilRouter Paid:</strong> 3-5 cheap paid models, embedding-based semantic similarity</li>
+                    <li>• <strong className="text-foreground">ArcRouter Free:</strong> 3-8 free models, Jaccard word-overlap consensus</li>
+                    <li>• <strong className="text-foreground">ArcRouter Paid:</strong> 3-5 cheap paid models, embedding-based semantic similarity</li>
                     <li>• <strong className="text-foreground">GPT-4o-mini:</strong> openai/gpt-4o-mini via OpenRouter</li>
                     <li>• <strong className="text-foreground">Claude Opus 4.6:</strong> anthropic/claude-opus-4-6 via OpenRouter</li>
                   </ul>
@@ -393,7 +393,7 @@ export default function ResearchPage() {
                     <h3 className="font-heading text-lg text-foreground">P0: Paid Tier API Failures</h3>
                   </div>
                   <p className="text-sm text-muted-foreground mb-2">
-                    <strong>Status:</strong> Production blocker. CouncilRouter Paid tier (budget="low") fails with 100% error rate on 4/6 datasets: factual_hard (0/35), gsm8k_hard (0/25), mmlu_subset (0/50), humaneval_sample (0/10). All requests return 500 Internal Server Error.
+                    <strong>Status:</strong> Production blocker. ArcRouter Paid tier (budget="low") fails with 100% error rate on 4/6 datasets: factual_hard (0/35), gsm8k_hard (0/25), mmlu_subset (0/50), humaneval_sample (0/10). All requests return 500 Internal Server Error.
                   </p>
                   <p className="text-sm text-muted-foreground">
                     <strong>Hypothesis:</strong> Paid tier models may have stricter rate limits or the embedding API is hitting quota. Requires investigation of Worker logs and OpenRouter API responses.
@@ -419,7 +419,7 @@ export default function ResearchPage() {
                     <h3 className="font-heading text-lg text-foreground">P2: MMLU Performance Gap</h3>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    <strong>Status:</strong> CouncilRouter Free (35.3%) and Claude Opus (44.0%) both significantly underperform GPT-4o-mini (80.0%) on MMLU STEM multiple-choice questions.
+                    <strong>Status:</strong> ArcRouter Free (35.3%) and Claude Opus (44.0%) both significantly underperform GPT-4o-mini (80.0%) on MMLU STEM multiple-choice questions.
                   </p>
                   <p className="text-sm text-muted-foreground">
                     <strong>Hypothesis:</strong> Free tier models may lack STEM knowledge. Multiple-choice format may favor models trained on academic benchmarks (GPT-4o-mini). Requires analysis of per-category breakdown (Bio/Chem/Physics/CS/Math).

@@ -20,7 +20,7 @@ const steps = [
   {
     num: "04",
     title: "Stream Response",
-    body: "Forward request to OpenRouter with the selected model. Full SSE streaming support with routing metadata in response headers (X-CouncilRouter-Model, X-CouncilRouter-Topic, X-CouncilRouter-Value-Score). Council mode available for multi-model consensus.",
+    body: "Forward request to OpenRouter with the selected model. Full SSE streaming support with routing metadata in response headers (X-ArcRouter-Model, X-ArcRouter-Topic, X-ArcRouter-Value-Score). Council mode available for multi-model consensus.",
   },
 ];
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import CouncilLogo from "@/components/CouncilLogo";
+import ArcLogo from "@/components/ArcLogo";
 import { ArrowRight, Check, Copy, Menu, X } from "lucide-react";
 import { motion } from "motion/react";
 
@@ -47,8 +47,8 @@ export default function DocsPage() {
         <aside className="hidden lg:flex w-64 flex-col border-r border-border fixed h-screen top-0 left-0 bg-background/95 backdrop-blur-sm z-30">
           <div className="p-6 border-b border-border">
             <a href="/" className="flex items-center gap-3 group">
-              <CouncilLogo className="w-6 h-6 text-foreground transition-transform duration-500 group-hover:rotate-180" />
-              <span className="font-heading font-bold text-lg tracking-tight text-foreground">CouncilRouter</span>
+              <ArcLogo className="w-6 h-6 text-foreground transition-transform duration-500 group-hover:rotate-180" />
+              <span className="font-heading font-bold text-lg tracking-tight text-foreground">ArcRouter</span>
             </a>
           </div>
           <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
@@ -79,8 +79,8 @@ export default function DocsPage() {
         {/* Mobile Header */}
         <div className="lg:hidden fixed top-0 w-full z-40 bg-background/80 backdrop-blur-md border-b border-border p-4 flex items-center justify-between">
             <a href="/" className="flex items-center gap-2">
-              <CouncilLogo className="w-5 h-5 text-foreground" />
-              <span className="font-heading font-bold text-sm text-foreground">CouncilRouter</span>
+              <ArcLogo className="w-5 h-5 text-foreground" />
+              <span className="font-heading font-bold text-sm text-foreground">ArcRouter</span>
             </a>
             <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
                 {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -109,7 +109,7 @@ export default function DocsPage() {
             {/* Introduction */}
             <section id="introduction" className="space-y-6">
               <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-[0.2em] block">Documentation</span>
-              <h1 className="font-heading text-4xl lg:text-5xl text-foreground tracking-tight">CouncilRouter Docs</h1>
+              <h1 className="font-heading text-4xl lg:text-5xl text-foreground tracking-tight">ArcRouter Docs</h1>
               <p className="text-muted-foreground leading-relaxed max-w-2xl text-lg">
                 Benchmark-verified LLM router with 340+ models. Automatically route any prompt to the best AI model based on real benchmark scores from HuggingFace, LiveBench, and LiveCodeBench. Two modes: smart routing (default) selects the best single model per topic, or council mode queries 3-7 models for consensus verification. OpenAI-compatible — drop in with any SDK.
               </p>
@@ -121,7 +121,7 @@ export default function DocsPage() {
                   Start Building
                 </button>
                 <a 
-                  href="https://github.com/councilrouter"
+                  href="https://github.com/arcrouter"
                   className="px-6 py-3 border border-border text-foreground font-mono text-xs uppercase tracking-wider rounded-lg hover:bg-foreground/5 transition-colors"
                 >
                     View on GitHub
@@ -165,7 +165,7 @@ const client = new OpenAI({
 
 // Smart routing (default) — routes to best model for the topic
 const response = await client.chat.completions.create({
-  model: "council-router-v1",
+  model: "arc-router-v1",
   messages: [{ role: "user", content: "Explain quantum supremacy." }],
 });
 
@@ -173,7 +173,7 @@ console.log(response.choices[0].message.content);
 
 // Council mode — multi-model consensus verification
 const council = await client.chat.completions.create({
-  model: "council-router-v1",
+  model: "arc-router-v1",
   messages: [{ role: "user", content: "Is P=NP?" }],
   mode: "council",     // Query 3-7 models
   budget: "low",       // "free" | "low" | "medium" | "high"
@@ -227,7 +227,7 @@ console.log(council.consensus); // { confidence, votes, ... }`}
                 <div>
                    <h2 className="font-heading text-2xl text-foreground mb-4">API Reference</h2>
                    <p className="text-muted-foreground">
-                     CouncilRouter exposes an OpenAI-compatible API. Two modes are available: smart routing (default) selects the best single model based on benchmark scores, and council mode queries multiple models for consensus verification.
+                     ArcRouter exposes an OpenAI-compatible API. Two modes are available: smart routing (default) selects the best single model based on benchmark scores, and council mode queries multiple models for consensus verification.
                    </p>
                 </div>
 
@@ -246,7 +246,7 @@ console.log(council.consensus); // { confidence, votes, ... }`}
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer sk_your_key" \\
   -d '{
-    "model": "council-router-v1",
+    "model": "arc-router-v1",
     "messages": [
       { "role": "user", "content": "Explain quantum computing" }
     ],
@@ -285,7 +285,7 @@ console.log(council.consensus); // { confidence, votes, ... }`}
                 <div>
                    <h2 className="font-heading text-2xl text-foreground mb-4">Request Parameters</h2>
                    <p className="text-muted-foreground">
-                     Standard OpenAI fields are supported. CouncilRouter adds <code className="text-xs bg-muted px-2 py-1 rounded">mode</code> and <code className="text-xs bg-muted px-2 py-1 rounded">budget</code> for routing control.
+                     Standard OpenAI fields are supported. ArcRouter adds <code className="text-xs bg-muted px-2 py-1 rounded">mode</code> and <code className="text-xs bg-muted px-2 py-1 rounded">budget</code> for routing control.
                    </p>
                 </div>
 
@@ -310,7 +310,7 @@ console.log(council.consensus); // { confidence, votes, ... }`}
                                 <td className="p-4 font-bold text-foreground">model</td>
                                 <td className="p-4 text-muted-foreground">string</td>
                                 <td className="p-4 text-muted-foreground">any</td>
-                                <td className="p-4 text-muted-foreground">Ignored — routing is automatic. Use &quot;council-router-v1&quot; for compatibility.</td>
+                                <td className="p-4 text-muted-foreground">Ignored — routing is automatic. Use &quot;arc-router-v1&quot; for compatibility.</td>
                             </tr>
                             <tr>
                                 <td className="p-4 font-bold text-foreground">mode</td>
@@ -364,7 +364,7 @@ console.log(council.consensus); // { confidence, votes, ... }`}
 {`{
   "id": "cons-1710...",
   "object": "chat.completion",
-  "model": "council-router-v1",
+  "model": "arc-router-v1",
   "choices": [{
     "index": 0,
     "message": { "role": "assistant", "content": "..." },
@@ -394,7 +394,7 @@ console.log(council.consensus); // { confidence, votes, ... }`}
 {`{
   "id": "cons-1710...",
   "object": "chat.completion",
-  "model": "council-router-v1",
+  "model": "arc-router-v1",
   "choices": [{
     "index": 0,
     "message": { "role": "assistant", "content": "..." },
@@ -440,27 +440,27 @@ console.log(council.consensus); // { confidence, votes, ... }`}
                         </thead>
                         <tbody className="divide-y divide-border text-xs">
                           <tr>
-                            <td className="p-4 font-bold text-foreground">X-CouncilRouter-Mode</td>
+                            <td className="p-4 font-bold text-foreground">X-ArcRouter-Mode</td>
                             <td className="p-4 text-muted-foreground">Routing mode used (&quot;default&quot;)</td>
                           </tr>
                           <tr>
-                            <td className="p-4 font-bold text-foreground">X-CouncilRouter-Model</td>
+                            <td className="p-4 font-bold text-foreground">X-ArcRouter-Model</td>
                             <td className="p-4 text-muted-foreground">Model ID selected by the router</td>
                           </tr>
                           <tr>
-                            <td className="p-4 font-bold text-foreground">X-CouncilRouter-Topic</td>
+                            <td className="p-4 font-bold text-foreground">X-ArcRouter-Topic</td>
                             <td className="p-4 text-muted-foreground">Detected topic domain (e.g. &quot;math&quot;, &quot;coding&quot;)</td>
                           </tr>
                           <tr>
-                            <td className="p-4 font-bold text-foreground">X-CouncilRouter-Budget</td>
+                            <td className="p-4 font-bold text-foreground">X-ArcRouter-Budget</td>
                             <td className="p-4 text-muted-foreground">Budget tier applied</td>
                           </tr>
                           <tr>
-                            <td className="p-4 font-bold text-foreground">X-CouncilRouter-Confidence</td>
+                            <td className="p-4 font-bold text-foreground">X-ArcRouter-Confidence</td>
                             <td className="p-4 text-muted-foreground">Topic detection confidence (0-1)</td>
                           </tr>
                           <tr>
-                            <td className="p-4 font-bold text-foreground">X-CouncilRouter-Failover-Count</td>
+                            <td className="p-4 font-bold text-foreground">X-ArcRouter-Failover-Count</td>
                             <td className="p-4 text-muted-foreground">Number of failover attempts before success</td>
                           </tr>
                         </tbody>
@@ -505,7 +505,7 @@ data: [DONE]`}
                 <div>
                    <h2 className="font-heading text-2xl text-foreground mb-4">Models & Scores</h2>
                    <p className="text-muted-foreground">
-                     CouncilRouter maintains a database of 340+ models with benchmark scores across 6 domains. Scores are refreshed daily from HuggingFace Open LLM Leaderboard, LiveBench, and LiveCodeBench.
+                     ArcRouter maintains a database of 340+ models with benchmark scores across 6 domains. Scores are refreshed daily from HuggingFace Open LLM Leaderboard, LiveBench, and LiveCodeBench.
                    </p>
                 </div>
 
@@ -546,7 +546,7 @@ data: [DONE]`}
                 <div>
                    <h2 className="font-heading text-2xl text-foreground mb-4">SDKs & Integrations</h2>
                    <p className="text-muted-foreground">
-                     CouncilRouter works with any OpenAI-compatible client. Below are tested integrations.
+                     ArcRouter works with any OpenAI-compatible client. Below are tested integrations.
                    </p>
                 </div>
 
@@ -565,14 +565,14 @@ client = OpenAI(
 
 # Smart routing (default mode)
 response = client.chat.completions.create(
-    model="council-router-v1",
+    model="arc-router-v1",
     messages=[{"role": "user", "content": "Explain quantum computing"}]
 )
 print(response.choices[0].message.content)
 
 # Council mode with streaming
 stream = client.chat.completions.create(
-    model="council-router-v1",
+    model="arc-router-v1",
     messages=[{"role": "user", "content": "Write a sorting algorithm"}],
     stream=True,
     extra_body={"mode": "council", "budget": "low"}
@@ -589,7 +589,7 @@ for chunk in stream:
                   <div className="border border-border rounded-xl p-6 bg-card">
                     <h3 className="font-heading text-lg mb-3 text-foreground">OpenCode (AI Coding Agent)</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      Use CouncilRouter as your coding agent with multi-model consensus verification.
+                      Use ArcRouter as your coding agent with multi-model consensus verification.
                     </p>
                     <div className="bg-[#0a0a0b] p-4 rounded-lg border border-white/10 overflow-x-auto mb-4">
 <pre className="text-zinc-300 font-mono text-xs leading-relaxed">
@@ -599,15 +599,15 @@ curl -fsSL https://opencode.ai/install | bash
 # 2. Add config to ~/.config/opencode/opencode.json
 {
   "provider": {
-    "councilrouter": {
+    "arcrouter": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "CouncilRouter",
+      "name": "ArcRouter",
       "options": {
         "baseURL": "${apiUrl}"
       },
       "models": {
-        "council-router-v1": {
-          "name": "CouncilRouter v1"
+        "arc-router-v1": {
+          "name": "ArcRouter v1"
         }
       }
     }
@@ -616,7 +616,7 @@ curl -fsSL https://opencode.ai/install | bash
 
 # 3. Start OpenCode and select the model
 opencode
-/model councilrouter:council-router-v1`}
+/model arcrouter:arc-router-v1`}
 </pre>
                     </div>
                     <p className="text-xs text-muted-foreground font-mono mt-2">
@@ -628,7 +628,7 @@ opencode
                   <div className="border border-border rounded-xl p-6 bg-card">
                     <h3 className="font-heading text-lg mb-3 text-foreground">Other Compatible Tools</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                      CouncilRouter works with any tool that supports custom OpenAI base URLs:
+                      ArcRouter works with any tool that supports custom OpenAI base URLs:
                     </p>
                     <ul className="space-y-2 text-sm text-muted-foreground font-mono">
                       <li className="flex items-start gap-2">

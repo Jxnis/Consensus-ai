@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
-        'X-Source': 'councilrouter-playground',
+        'X-Source': 'arcrouter-playground',
       },
       body: JSON.stringify(body),
       signal: controller.signal,
