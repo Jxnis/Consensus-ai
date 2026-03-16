@@ -1,5 +1,7 @@
+'use client';
+
 import { motion, useInView } from "motion/react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 const plans = [
   {
@@ -15,6 +17,7 @@ const plans = [
       "Community Discord",
     ],
     cta: "Get Started",
+    href: "/docs",
     highlighted: false,
   },
   {
@@ -30,6 +33,7 @@ const plans = [
       "x402 micropayments (USDC)",
     ],
     cta: "Start Building",
+    useCheckout: true,
     highlighted: true,
   },
   {
@@ -53,6 +57,31 @@ const plans = [
 const PricingNew = () => {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  const handleCheckout = async () => {
+    setCheckoutLoading(true);
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.url) {
+        // Redirect to Stripe checkout
+        window.location.href = data.url;
+      } else {
+        alert('Failed to start checkout: ' + (data.error || 'Unknown error'));
+        setCheckoutLoading(false);
+      }
+    } catch (error) {
+      console.error('Checkout error:', error);
+      alert('Network error. Please try again.');
+      setCheckoutLoading(false);
+    }
+  };
 
   return (
     <section id="pricing" className="py-32 px-8">
@@ -105,16 +134,30 @@ const PricingNew = () => {
                 ))}
               </ul>
 
-              <a
-                href={plan.href || "#"}
-                className={`w-full font-mono text-[11px] tracking-[0.15em] uppercase py-4 transition-all duration-500 hover:tracking-[0.3em] text-center block ${
-                  plan.highlighted
-                    ? "bg-foreground text-background"
-                    : "border border-border text-foreground hover:bg-foreground hover:text-background"
-                }`}
-              >
-                {plan.cta}
-              </a>
+              {(plan as any).useCheckout ? (
+                <button
+                  onClick={handleCheckout}
+                  disabled={checkoutLoading}
+                  className={`w-full font-mono text-[11px] tracking-[0.15em] uppercase py-4 transition-all duration-500 hover:tracking-[0.3em] text-center disabled:opacity-50 disabled:cursor-not-allowed ${
+                    plan.highlighted
+                      ? "bg-foreground text-background"
+                      : "border border-border text-foreground hover:bg-foreground hover:text-background"
+                  }`}
+                >
+                  {checkoutLoading ? 'Loading...' : plan.cta}
+                </button>
+              ) : (
+                <a
+                  href={plan.href || "#"}
+                  className={`w-full font-mono text-[11px] tracking-[0.15em] uppercase py-4 transition-all duration-500 hover:tracking-[0.3em] text-center block ${
+                    plan.highlighted
+                      ? "bg-foreground text-background"
+                      : "border border-border text-foreground hover:bg-foreground hover:text-background"
+                  }`}
+                >
+                  {plan.cta}
+                </a>
+              )}
             </motion.div>
           ))}
         </div>
