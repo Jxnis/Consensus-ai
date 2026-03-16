@@ -26,11 +26,15 @@ export interface CompositeScore {
 // Source reliability weights
 // Higher weight = more trustworthy
 const SOURCE_WEIGHTS: SourceWeight = {
-  our_benchmark: 3.0,   // Our own tested scores — highest trust
-  livebench: 2.0,       // Rotated questions, anti-contamination
-  livecodebench: 2.0,   // Contamination-free coding benchmark
-  huggingface: 1.5,     // Standard but potentially contaminated
-  provider_claim: 0.5,  // Self-reported, lowest trust
+  our_benchmark: 3.0,      // Our own tested scores — highest trust
+  livebench: 2.0,          // Rotated questions, anti-contamination
+  livecodebench: 2.0,      // Contamination-free coding benchmark
+  chatbot_arena: 2.0,      // LMSYS crowdsourced rankings — large sample size
+  bigcodebench: 2.0,       // Comprehensive real-world code tasks
+  alpaca_eval: 1.8,        // Instruction-following quality (GPT-4 baseline)
+  huggingface: 1.5,        // Standard but potentially contaminated
+  provider_claim: 0.5,     // Self-reported, lowest trust
+  synthetic: 0.3,          // Estimated scores, lowest weight
 };
 
 // Cost sensitivity per budget tier

@@ -81,7 +81,7 @@ function getChargedPriceUsd(authTier: string, budget: string, complexityTier: st
   if (authTier === "paid") return 0.002;
 
   // x402 path: variable pricing based on complexity (TASK-59)
-  if (authTier === "free" && budget !== "free") {
+  if (authTier === "x402" || (authTier === "free" && budget !== "free")) {
     const priceByTier: Record<string, number> = {
       SIMPLE: 0.001,
       MEDIUM: 0.002,
@@ -181,16 +181,19 @@ app.use("/v1/*", async (c, next) => {
   try {
     const clientIP = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
     const authTier = (c.get("authTier" as never) as string) || "free";
+    const hasX402Header = Boolean(c.req.header("payment-signature") || c.req.header("x-payment"));
+    const effectiveTier = authTier === "free" && hasX402Header ? "x402" : authTier;
     const userId = (c.get("userId" as never) as string) || clientIP;
 
     const limits: Record<string, number> = {
       free: 20,
       playground: 50,
+      x402: 1000,
       paid: 1000,
     };
 
-    const limit = limits[authTier] || 20;
-    const key = `ratelimit:${authTier}:${userId}`;
+    const limit = limits[effectiveTier] || 20;
+    const key = `ratelimit:${effectiveTier}:${userId}`;
 
     const current = await c.env.CONSENSUS_CACHE.get(key);
     const count = current ? parseInt(current) : 0;
@@ -199,8 +202,8 @@ app.use("/v1/*", async (c, next) => {
       return c.json({
         error: "Rate limit exceeded",
         limit,
-        tier: authTier,
-        message: `Max ${limit} requests per hour for ${authTier} tier.`
+        tier: effectiveTier,
+        message: `Max ${limit} requests per hour for ${effectiveTier} tier.`
       }, 429);
     }
 
@@ -311,7 +314,14 @@ app.use("/v1/chat/completions", async (c, next) => {
       x402Server
     );
 
-    return await dynamicHandler(c, next);
+    // Wrap next() so authTier is set to "x402" only when payment succeeds
+    // (paymentMiddleware calls next() on success, returns 402 on failure)
+    const wrappedNext = async () => {
+      c.set("authTier" as never, "x402" as never);
+      return await next();
+    };
+
+    return await dynamicHandler(c, wrappedNext);
   } catch (error: unknown) {
     // x402 facilitator error — return manual 402 with dynamic price
     console.error("[x402] Middleware error:", error instanceof Error ? error.message : String(error));
@@ -1156,6 +1166,7 @@ app.get("/admin/stats", async (c) => {
     streamRequests,
     freeRequests,
     playgroundRequests,
+    x402Requests,
     paidRequests,
     cacheHitCount,
     cacheMissCount,
@@ -1181,6 +1192,7 @@ app.get("/admin/stats", async (c) => {
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:stream_requests`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:free`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:playground`),
+    getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:x402`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:requests_tier:paid`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cache_hit`),
     getMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:cache_miss`),
@@ -1213,6 +1225,7 @@ app.get("/admin/stats", async (c) => {
       by_tier: {
         free: freeRequests,
         playground: playgroundRequests,
+        x402: x402Requests,
         paid: paidRequests,
       },
       by_mode: {
@@ -1415,6 +1428,199 @@ app.post("/admin/invalidate-cache", async (c) => {
   }
 });
 
+// Admin: Sync all benchmarks (orchestrator) - runs all scrapers + synthetic + recalculation
+app.post("/admin/sync-all-benchmarks", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { syncAllBenchmarks } = await import("./db/scrapers/orchestrator");
+    const result = await syncAllBenchmarks(c.env.SCORE_DB);
+
+    return c.json({
+      success: result.success,
+      duration_ms: result.duration_ms,
+      total_scores_updated: result.total_scores_updated,
+      composite_scores_calculated: result.composite_scores_calculated,
+      scrapers: result.scrapers,
+      synthetic: result.synthetic,
+      errors: result.errors,
+    });
+  } catch (err) {
+    return c.json({
+      error: "Benchmark synchronization failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Sync Chatbot Arena (requires admin auth)
+app.post("/admin/sync-chatbot-arena", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { scrapeChatbotArena } = await import("./db/scrapers/chatbot-arena");
+    const result = await scrapeChatbotArena(c.env.SCORE_DB);
+
+    return c.json({
+      success: result.updated > 0,
+      updated: result.updated,
+      models_matched: result.models_matched,
+      models_skipped: result.models_skipped,
+      errors: result.errors,
+    });
+  } catch (err) {
+    return c.json({
+      error: "Chatbot Arena sync failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Sync BigCodeBench (requires admin auth)
+app.post("/admin/sync-bigcodebench", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { scrapeBigCodeBench } = await import("./db/scrapers/bigcodebench");
+    const result = await scrapeBigCodeBench(c.env.SCORE_DB);
+
+    return c.json({
+      success: result.updated > 0,
+      updated: result.updated,
+      models_matched: result.models_matched,
+      models_skipped: result.models_skipped,
+      errors: result.errors,
+    });
+  } catch (err) {
+    return c.json({
+      error: "BigCodeBench sync failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Sync AlpacaEval (requires admin auth)
+app.post("/admin/sync-alpaca-eval", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { scrapeAlpacaEval } = await import("./db/scrapers/alpaca-eval");
+    const result = await scrapeAlpacaEval(c.env.SCORE_DB);
+
+    return c.json({
+      success: result.updated > 0,
+      updated: result.updated,
+      models_matched: result.models_matched,
+      models_skipped: result.models_skipped,
+      errors: result.errors,
+    });
+  } catch (err) {
+    return c.json({
+      error: "AlpacaEval sync failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Generate synthetic scores (requires admin auth)
+app.post("/admin/generate-synthetic-scores", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { generateSyntheticScores } = await import("./db/scrapers/synthetic-scores");
+    const result = await generateSyntheticScores(c.env.SCORE_DB);
+
+    return c.json({
+      success: result.updated > 0,
+      updated: result.updated,
+      models_matched: result.models_matched,
+      errors: result.errors,
+    });
+  } catch (err) {
+    return c.json({
+      error: "Synthetic score generation failed",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
+// Admin: Get benchmark coverage stats (requires admin auth)
+app.get("/admin/coverage-stats", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not configured" }, 503);
+  }
+
+  try {
+    const { getCoverageStats } = await import("./db/scrapers/orchestrator");
+    const stats = await getCoverageStats(c.env.SCORE_DB);
+
+    return c.json(stats);
+  } catch (err) {
+    return c.json({
+      error: "Failed to get coverage stats",
+      message: err instanceof Error ? err.message : String(err),
+    }, 500);
+  }
+});
+
 // Stripe: Create checkout session
 app.post("/api/stripe/create-checkout", async (c) => {
   const { createCheckoutSession } = await import("./payments/stripe");
@@ -1431,6 +1637,117 @@ app.post("/api/stripe/portal", async (c) => {
 app.post("/api/stripe/webhook", async (c) => {
   const { handleWebhook } = await import("./payments/stripe");
   return await handleWebhook(c);
+});
+
+// Stripe: Retrieve API key after checkout (rate-limited)
+app.get("/v1/stripe/api-key", async (c) => {
+  // Rate limiting: 5 requests per minute per IP
+  const ip = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
+  const rateLimitKey = `ratelimit:apikey:${ip}`;
+
+  const currentCount = await c.env.CONSENSUS_CACHE.get(rateLimitKey);
+  const count = currentCount ? parseInt(currentCount, 10) : 0;
+
+  if (count >= 5) {
+    return c.json({
+      error: "Rate limit exceeded. Please wait a minute before trying again."
+    }, 429);
+  }
+
+  await c.env.CONSENSUS_CACHE.put(
+    rateLimitKey,
+    String(count + 1),
+    { expirationTtl: 60 }
+  );
+
+  const sessionId = c.req.query("session_id");
+  const email = c.req.query("email");
+  const authHeader = c.req.header("Authorization");
+  const headerApiKey = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
+  const apiKey = c.req.query("api_key") || headerApiKey;
+
+  if (!sessionId && !email) {
+    return c.json({
+      error: "Either session_id or email parameter is required"
+    }, 400);
+  }
+
+  try {
+    // Path 1: Retrieve by session_id (secure, time-limited)
+    if (sessionId) {
+      // Check if session mapping exists (stored by webhook with 24h TTL)
+      const sessionData = await c.env.CONSENSUS_CACHE.get(`session:${sessionId}`);
+
+      if (!sessionData) {
+        return c.json({
+          error: "Session not found or expired. API keys are only retrievable for 24 hours after checkout."
+        }, 404);
+      }
+
+      const { apiKey, email: customerEmail, customerId } = JSON.parse(sessionData);
+
+      // Enforce one-time retrieval: delete session mapping after first successful fetch.
+      try {
+        await c.env.CONSENSUS_CACHE.delete(`session:${sessionId}`);
+      } catch (err) {
+        console.error("[Stripe] Failed to delete session mapping (non-fatal):", err);
+      }
+
+      return c.json({
+        apiKey,
+        email: customerEmail,
+        customerId,
+        message: "Save this API key securely. It will not be shown again."
+      });
+    }
+
+    // Path 2: Retrieve by email (requires API key for ownership verification)
+    if (email) {
+      if (!apiKey) {
+        return c.json({
+          error: "API key is required to verify ownership for email lookup."
+        }, 401);
+      }
+
+      const providedHash = await hashApiKey(apiKey);
+      const apiKeyHash = await c.env.CONSENSUS_CACHE.get(`email:${email}`);
+
+      if (!apiKeyHash || apiKeyHash !== providedHash) {
+        return c.json({
+          error: "Unable to verify ownership for this email address."
+        }, 403);
+      }
+
+      const keyData = await c.env.CONSENSUS_CACHE.get(`apikey:${apiKeyHash}`);
+
+      if (!keyData) {
+        return c.json({
+          error: "Unable to verify ownership for this email address."
+        }, 403);
+      }
+
+      const data = JSON.parse(keyData);
+
+      // Return subscription status but NOT the raw API key (security)
+      return c.json({
+        email: data.email,
+        tier: data.tier,
+        status: data.status,
+        customerId: data.customerId,
+        created: data.created,
+        message: "Your API key was sent to your email during checkout. If you lost it, please contact support."
+      });
+    }
+
+    return c.json({ error: "Invalid request" }, 400);
+
+  } catch (err) {
+    console.error("[Stripe] API key retrieval error:", err);
+    return c.json({
+      error: "Failed to retrieve API key",
+      details: err instanceof Error ? err.message : "Unknown error"
+    }, 500);
+  }
 });
 
 // Admin: Database health check (requires admin auth)
@@ -1467,40 +1784,40 @@ app.get("/admin/db-health", async (c) => {
 export default {
   fetch: app.fetch,
   scheduled: async (event: ScheduledEvent, env: CloudflareBindings, ctx: ExecutionContext) => {
-    console.log('[Cron] Running scheduled scraper pipeline...');
+    console.log('[Cron] Running scheduled benchmark synchronization...');
 
     try {
       // 1. Sync pricing from OpenRouter (updates all models)
       const { scrapeOpenRouterPricing } = await import('./db/scrapers/openrouter-pricing');
       await scrapeOpenRouterPricing(env.SCORE_DB, env.OPENROUTER_API_KEY);
 
-      // 2. Sync HuggingFace benchmark scores
-      const { scrapeHuggingFace } = await import('./db/scrapers/huggingface');
-      await scrapeHuggingFace(env.SCORE_DB);
+      // 2. Run orchestrator: all scrapers + synthetic scores + recalculation
+      const { syncAllBenchmarks } = await import('./db/scrapers/orchestrator');
+      const result = await syncAllBenchmarks(env.SCORE_DB);
 
-      // 3. Sync LiveBench scores
-      const { scrapeLiveBench } = await import('./db/scrapers/livebench');
-      await scrapeLiveBench(env.SCORE_DB);
+      console.log(
+        `[Cron] Benchmark sync complete: ${result.total_scores_updated} scores updated, ` +
+        `${result.composite_scores_calculated} composite scores calculated`
+      );
 
-      // 4. Sync LiveCodeBench coding scores
-      const { scrapeLiveCodeBench } = await import('./db/scrapers/livecodebench');
-      await scrapeLiveCodeBench(env.SCORE_DB);
+      if (result.errors.length > 0) {
+        console.error(`[Cron] Errors encountered: ${result.errors.length}`);
+        for (const error of result.errors.slice(0, 10)) {
+          console.error(`[Cron] ${error}`);
+        }
+      }
 
-      // 5. Flush telemetry data from KV to D1
+      // 3. Flush telemetry data from KV to D1
       const { RoutingTelemetry } = await import('./router/telemetry');
       const telemetry = new RoutingTelemetry(env.CONSENSUS_CACHE);
       await telemetry.flushToD1(env.SCORE_DB);
 
-      // 6. Recalculate composite scores (once after all scrapers finish)
-      const { recalculateScores } = await import('./db/score-calculator');
-      await recalculateScores(env.SCORE_DB);
-
-      // 7. Invalidate route cache (scores changed, cached routes may be stale)
+      // 4. Invalidate route cache (scores changed, cached routes may be stale)
       const { RouteCache } = await import('./router/route-cache');
       const routeCache = new RouteCache(env.CONSENSUS_CACHE);
       await routeCache.invalidateAll();
 
-      console.log('[Cron] Scraper pipeline complete');
+      console.log('[Cron] Pipeline complete');
     } catch (err) {
       console.error('[Cron] Pipeline failed:', err instanceof Error ? err.message : String(err));
     }

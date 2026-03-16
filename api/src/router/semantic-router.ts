@@ -131,8 +131,8 @@ export class SemanticRouter {
         model_id: shortlist[0].model_id,
         semantic_score: 0,
         value_score: shortlist[0].value_score,
-        reliability_score: shortlist[0].reliability || 0,
-        final_score: shortlist[0].value_score,
+        reliability_score: shortlist[0].reliability_pct || 0,
+        final_score: Math.max(0, Math.min(1, shortlist[0].value_score / 100)),
         shortlist_size: shortlist.length,
         semantic_latency_ms,
         semantic_enabled: false,
@@ -148,7 +148,7 @@ export class SemanticRouter {
     domain: string,
     budget: string,
     limit: number
-  ): Promise<Array<{ model_id: string; value_score: number; reliability: number }>> {
+  ): Promise<Array<{ model_id: string; value_score: number; reliability_pct: number }>> {
     // Try exact domain first, then parent domain if subdomain
     const domains = domain.includes('/') ? [domain, domain.split('/')[0]] : [domain];
 
@@ -156,11 +156,9 @@ export class SemanticRouter {
       const result = await this.db
         .prepare(
           `SELECT DISTINCT cs.model_id, cs.value_score,
-           COALESCE(
-             (SELECT AVG(score) FROM benchmark_scores WHERE model_id = cs.model_id),
-             0
-           ) as reliability
+           COALESCE(m.reliability_pct, 50) as reliability_pct
            FROM composite_scores cs
+           JOIN models m ON m.id = cs.model_id
            WHERE cs.domain = ?
            ORDER BY cs.value_score DESC
            LIMIT ?`
@@ -169,7 +167,7 @@ export class SemanticRouter {
         .all();
 
       if (result.results && result.results.length > 0) {
-        return result.results as Array<{ model_id: string; value_score: number; reliability: number }>;
+        return result.results as Array<{ model_id: string; value_score: number; reliability_pct: number }>;
       }
     }
 
@@ -177,11 +175,9 @@ export class SemanticRouter {
     const result = await this.db
       .prepare(
         `SELECT DISTINCT cs.model_id, cs.value_score,
-         COALESCE(
-           (SELECT AVG(score) FROM benchmark_scores WHERE model_id = cs.model_id),
-           0
-         ) as reliability
+         COALESCE(m.reliability_pct, 50) as reliability_pct
          FROM composite_scores cs
+         JOIN models m ON m.id = cs.model_id
          WHERE cs.domain = 'general'
          ORDER BY cs.value_score DESC
          LIMIT ?`
@@ -189,7 +185,7 @@ export class SemanticRouter {
       .bind(limit)
       .all();
 
-    return (result.results || []) as Array<{ model_id: string; value_score: number; reliability: number }>;
+    return (result.results || []) as Array<{ model_id: string; value_score: number; reliability_pct: number }>;
   }
 
   /**
@@ -304,7 +300,7 @@ export class SemanticRouter {
   private rankBySemanticSimilarity(
     queryEmbedding: Float32Array,
     modelEmbeddings: ModelEmbedding[],
-    shortlist: Array<{ model_id: string; value_score: number; reliability: number }>
+    shortlist: Array<{ model_id: string; value_score: number; reliability_pct: number }>
   ): Array<{
     model_id: string;
     semantic_score: number;
@@ -320,12 +316,12 @@ export class SemanticRouter {
 
       const semantic_score = this.cosineSimilarity(queryEmbedding, modelEmb.embedding);
       const value_score = shortlistEntry.value_score;
-      const reliability_score = shortlistEntry.reliability;
+      const reliability_score = shortlistEntry.reliability_pct;
 
       // Normalize scores to 0-1 range
       const norm_semantic = Math.max(0, Math.min(1, (semantic_score + 1) / 2)); // cosine is [-1, 1]
-      const norm_value = Math.max(0, Math.min(1, value_score)); // already 0-1
-      const norm_reliability = Math.max(0, Math.min(1, reliability_score)); // already 0-1
+      const norm_value = Math.max(0, Math.min(1, value_score / 100)); // value_score is 0-100
+      const norm_reliability = Math.max(0, Math.min(1, reliability_score / 100)); // reliability_pct is 0-100
 
       const final_score =
         norm_semantic * WEIGHTS.semantic +
