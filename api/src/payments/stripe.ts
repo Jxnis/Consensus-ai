@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import { CloudflareBindings } from "../types";
 
 /**
- * Stripe Integration for CouncilRouter
+ * Stripe Integration for ArcRouter
  *
  * Handles:
  * - Checkout session creation (metered subscription)
@@ -39,8 +39,13 @@ export async function createCheckoutSession(
       line_items: [{
         price: c.env.STRIPE_PRICE_ID,
       }],
-      success_url: 'https://councilrouter.ai/dashboard?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: 'https://councilrouter.ai/pricing',
+      subscription_data: {
+        metadata: {
+          source: 'arcrouter',
+        },
+      },
+      success_url: 'https://arcrouter-web.janis-ellerbrock.workers.dev/dashboard?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: 'https://arcrouter-web.janis-ellerbrock.workers.dev#pricing',
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
       customer_email: undefined, // Allow user to enter email
@@ -79,7 +84,7 @@ export async function createPortalSession(
 
     const session = await stripe.billingPortal.sessions.create({
       customer: body.customer_id,
-      return_url: 'https://councilrouter.ai/dashboard',
+      return_url: 'https://arcrouter-web.janis-ellerbrock.workers.dev/dashboard',
     });
 
     return c.json({ url: session.url });
@@ -195,6 +200,18 @@ async function handleCheckoutCompleted(
 
   // Store API key with subscription info in KV
   try {
+    // Persist email on subscription metadata for future webhook events.
+    try {
+      await stripe.subscriptions.update(subscription.id, {
+        metadata: {
+          ...subscription.metadata,
+          email: customerEmail,
+        },
+      });
+    } catch (err) {
+      console.error('[Stripe] Failed to update subscription metadata (non-fatal):', err);
+    }
+
     await c.env.CONSENSUS_CACHE.put(
       `apikey:${apiKeyHash}`,
       JSON.stringify({
@@ -214,10 +231,28 @@ async function handleCheckoutCompleted(
       apiKeyHash
     );
 
+    // Store reverse lookup: customerId → API key hash (used for webhook updates)
+    if (customerId) {
+      await c.env.CONSENSUS_CACHE.put(
+        `customer:${customerId}`,
+        apiKeyHash
+      );
+    }
+
+    // Store session mapping for 24-hour retrieval (allows user to get API key from dashboard)
+    await c.env.CONSENSUS_CACHE.put(
+      `session:${session.id}`,
+      JSON.stringify({
+        apiKey,  // Store the PLAIN API key here (only accessible via session_id for 24h)
+        email: customerEmail,
+        customerId,
+      }),
+      { expirationTtl: 86400 }  // 24 hours
+    );
+
     console.log(`[Stripe] Provisioned API key for ${customerEmail}, subscription ${session.subscription}`);
 
-    // TODO: Send email with API key
-    // For now, API key is only accessible via customer portal or needs manual delivery
+    // TODO: Send email with API key for backup delivery
   } catch (kvErr) {
     console.error('[Stripe] KV storage failed (non-fatal):', kvErr);
     // Continue anyway - subscription is active, can be manually provisioned
@@ -235,17 +270,20 @@ async function handleSubscriptionUpdated(
   const subscription = event.data.object as Stripe.Subscription;
   const customerId = subscription.customer as string;
 
-  // Find API key by customer ID
-  const email = subscription.metadata?.email;
-  if (!email) {
-    console.warn('[Stripe] No email in subscription metadata');
-    return;
-  }
-
   try {
-    const apiKeyHash = await c.env.CONSENSUS_CACHE.get(`email:${email}`);
+    const email = subscription.metadata?.email;
+    let apiKeyHash: string | null = null;
+
+    if (customerId) {
+      apiKeyHash = await c.env.CONSENSUS_CACHE.get(`customer:${customerId}`);
+    }
+
+    if (!apiKeyHash && email) {
+      apiKeyHash = await c.env.CONSENSUS_CACHE.get(`email:${email}`);
+    }
+
     if (!apiKeyHash) {
-      console.warn(`[Stripe] No API key found for email ${email}`);
+      console.warn(`[Stripe] No API key found for customer ${customerId || 'unknown'}`);
       return;
     }
 
@@ -261,7 +299,7 @@ async function handleSubscriptionUpdated(
 
     await c.env.CONSENSUS_CACHE.put(`apikey:${apiKeyHash}`, JSON.stringify(data));
 
-    console.log(`[Stripe] Updated subscription status to ${subscription.status} for ${email}`);
+    console.log(`[Stripe] Updated subscription status to ${subscription.status} for ${data.email || customerId}`);
   } catch (kvErr) {
     console.error('[Stripe] Subscription update failed (non-fatal):', kvErr);
   }
@@ -277,17 +315,22 @@ async function handleSubscriptionDeleted(
   event: Stripe.Event
 ) {
   const subscription = event.data.object as Stripe.Subscription;
-  const email = subscription.metadata?.email;
-
-  if (!email) {
-    console.warn('[Stripe] No email in subscription metadata');
-    return;
-  }
+  const customerId = subscription.customer as string;
 
   try {
-    const apiKeyHash = await c.env.CONSENSUS_CACHE.get(`email:${email}`);
+    const email = subscription.metadata?.email;
+    let apiKeyHash: string | null = null;
+
+    if (customerId) {
+      apiKeyHash = await c.env.CONSENSUS_CACHE.get(`customer:${customerId}`);
+    }
+
+    if (!apiKeyHash && email) {
+      apiKeyHash = await c.env.CONSENSUS_CACHE.get(`email:${email}`);
+    }
+
     if (!apiKeyHash) {
-      console.warn(`[Stripe] No API key found for email ${email}`);
+      console.warn(`[Stripe] No API key found for customer ${customerId || 'unknown'}`);
       return;
     }
 
@@ -306,7 +349,7 @@ async function handleSubscriptionDeleted(
 
     await c.env.CONSENSUS_CACHE.put(`apikey:${apiKeyHash}`, JSON.stringify(data));
 
-    console.log(`[Stripe] Downgraded ${email} to free tier (subscription canceled)`);
+    console.log(`[Stripe] Downgraded ${data.email || customerId} to free tier (subscription canceled)`);
   } catch (kvErr) {
     console.error('[Stripe] Subscription deletion handling failed (non-fatal):', kvErr);
   }
@@ -328,17 +371,22 @@ async function handlePaymentFailed(
     return;
   }
 
-  // Retrieve subscription to get email
+  // Retrieve subscription to get customer + metadata
   const subscriptionData = await stripe.subscriptions.retrieve(subscription as string);
+  const customerId = subscriptionData.customer as string;
   const email = subscriptionData.metadata?.email;
 
-  if (!email) {
-    console.warn('[Stripe] No email in subscription metadata for failed payment');
-    return;
-  }
-
   try {
-    const apiKeyHash = await c.env.CONSENSUS_CACHE.get(`email:${email}`);
+    let apiKeyHash: string | null = null;
+
+    if (customerId) {
+      apiKeyHash = await c.env.CONSENSUS_CACHE.get(`customer:${customerId}`);
+    }
+
+    if (!apiKeyHash && email) {
+      apiKeyHash = await c.env.CONSENSUS_CACHE.get(`email:${email}`);
+    }
+
     if (!apiKeyHash) {
       return;
     }
@@ -354,7 +402,7 @@ async function handlePaymentFailed(
 
     await c.env.CONSENSUS_CACHE.put(`apikey:${apiKeyHash}`, JSON.stringify(data));
 
-    console.log(`[Stripe] Payment failed for ${email}, marked as past_due`);
+    console.log(`[Stripe] Payment failed for ${data.email || customerId}, marked as past_due`);
 
     // TODO: Send email notification about payment failure
   } catch (kvErr) {
