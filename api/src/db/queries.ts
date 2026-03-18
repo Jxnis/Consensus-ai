@@ -4,6 +4,10 @@
  * Provides high-level query functions for the routing engine.
  * These functions abstract away SQL details and provide clean interfaces.
  */
+import type { ComplexityTier } from "../types";
+import { normalizeRoutingBudget, type RoutingBudget } from "../router/budget";
+
+export type { RoutingBudget };
 
 export interface ModelProfile {
   id: string;
@@ -15,6 +19,37 @@ export interface ModelProfile {
   quality_score?: number;
   value_score?: number;
   rank?: number;
+}
+
+const COMPLEXITY_WEIGHTS: Record<ComplexityTier, { quality: number; value: number }> = {
+  SIMPLE: { quality: 0.3, value: 0.7 },
+  MEDIUM: { quality: 0.5, value: 0.5 },
+  COMPLEX: { quality: 0.8, value: 0.2 },
+  REASONING: { quality: 0.9, value: 0.1 },
+};
+
+function getBudgetFilter(budget: RoutingBudget): string {
+  // Free is a hard constraint. Paid budgets are preferences handled in ranking.
+  if (budget === "free") {
+    return " AND m.is_free = 1";
+  }
+  return " AND m.is_free = 0";
+}
+
+function getReasoningFilter(complexity: ComplexityTier): string {
+  if (complexity !== "REASONING") {
+    return "";
+  }
+
+  // Schema-safe heuristic until supports_reasoning is added as a real model column.
+  return ` AND (
+    lower(m.id) LIKE '%o3%' OR
+    lower(m.id) LIKE '%o4%' OR
+    lower(m.id) LIKE '%r1%' OR
+    lower(m.id) LIKE '%qwq%' OR
+    lower(m.id) LIKE '%reason%' OR
+    lower(m.id) LIKE '%deepthink%'
+  )`;
 }
 
 /**
@@ -29,20 +64,23 @@ export interface ModelProfile {
 export async function getBestModel(
   db: D1Database,
   domain: string,
-  budget: string
+  budget: string,
+  complexity: ComplexityTier = "MEDIUM"
 ): Promise<ModelProfile | null> {
+  const normalizedBudget = normalizeRoutingBudget(budget);
+
   // Try exact domain first
-  let result = await queryBestModel(db, domain, budget);
+  let result = await queryBestModel(db, domain, normalizedBudget, complexity);
 
   // If no results and domain has a subcategory (e.g., 'code/security'), try parent
   if (!result && domain.includes('/')) {
     const parentDomain = domain.split('/')[0];
-    result = await queryBestModel(db, parentDomain, budget);
+    result = await queryBestModel(db, parentDomain, normalizedBudget, complexity);
   }
 
   // If still no results, fall back to 'general'
   if (!result && domain !== 'general') {
-    result = await queryBestModel(db, 'general', budget);
+    result = await queryBestModel(db, 'general', normalizedBudget, complexity);
   }
 
   return result;
@@ -55,8 +93,11 @@ export async function getBestModel(
 async function queryBestModel(
   db: D1Database,
   domain: string,
-  budget: string
+  budget: RoutingBudget,
+  complexity: ComplexityTier
 ): Promise<ModelProfile | null> {
+  const { quality, value } = COMPLEXITY_WEIGHTS[complexity];
+
   let query = `
     SELECT
       m.id,
@@ -74,20 +115,11 @@ async function queryBestModel(
       AND m.is_available = 1
   `;
 
-  const bindings: (string | number)[] = [domain];
+  query += getBudgetFilter(budget);
+  query += getReasoningFilter(complexity);
+  query += ` ORDER BY (cs.quality_score * ? + cs.value_score * ?) DESC LIMIT 1`;
 
-  // Apply budget filters
-  if (budget === 'free') {
-    query += ` AND m.is_free = 1`;
-  } else if (budget === 'low') {
-    query += ` AND m.is_free = 0 AND m.input_price_per_1m < 0.5`;
-  } else if (budget === 'medium') {
-    query += ` AND m.is_free = 0 AND m.input_price_per_1m < 5.0`;
-  } else if (budget === 'high') {
-    query += ` AND m.is_free = 0`; // No upper limit for high budget
-  }
-
-  query += ` ORDER BY cs.value_score DESC LIMIT 1`;
+  const bindings: (string | number)[] = [domain, quality, value];
 
   const result = await db.prepare(query).bind(...bindings).first<ModelProfile>();
 
@@ -101,21 +133,22 @@ async function queryBestModel(
 export async function getModelsForDomain(
   db: D1Database,
   domain: string,
-  budget?: string
+  budget?: string,
+  complexity: ComplexityTier = "MEDIUM"
 ): Promise<ModelProfile[]> {
-  const resolvedBudget = budget || "medium";
+  const resolvedBudget = normalizeRoutingBudget(budget);
 
-  let models = await queryModelsForDomain(db, domain, resolvedBudget);
+  let models = await queryModelsForDomain(db, domain, resolvedBudget, complexity);
 
   if (models.length === 0 && domain.includes("/")) {
     const parentDomain = domain.split("/")[0];
     console.log(`[queries] No models for '${domain}', trying parent '${parentDomain}'`);
-    models = await queryModelsForDomain(db, parentDomain, resolvedBudget);
+    models = await queryModelsForDomain(db, parentDomain, resolvedBudget, complexity);
   }
 
   if (models.length === 0 && domain !== "general") {
     console.log(`[queries] No models for '${domain}', trying fallback 'general'`);
-    models = await queryModelsForDomain(db, "general", resolvedBudget);
+    models = await queryModelsForDomain(db, "general", resolvedBudget, complexity);
   }
 
   return models;
@@ -124,8 +157,11 @@ export async function getModelsForDomain(
 async function queryModelsForDomain(
   db: D1Database,
   domain: string,
-  budget: string
+  budget: RoutingBudget,
+  complexity: ComplexityTier
 ): Promise<ModelProfile[]> {
+  const { quality, value } = COMPLEXITY_WEIGHTS[complexity];
+
   let query = `
     SELECT
       m.id,
@@ -143,20 +179,11 @@ async function queryModelsForDomain(
       AND m.is_available = 1
   `;
 
-  const bindings: (string | number)[] = [domain];
+  query += getBudgetFilter(budget);
+  query += getReasoningFilter(complexity);
+  query += ` ORDER BY (cs.quality_score * ? + cs.value_score * ?) DESC LIMIT 10`;
 
-  // Apply budget filter if provided
-  if (budget === 'free') {
-    query += ` AND m.is_free = 1`;
-  } else if (budget === 'low') {
-    query += ` AND m.is_free = 0 AND m.input_price_per_1m < 0.5`;
-  } else if (budget === 'medium') {
-    query += ` AND m.is_free = 0 AND m.input_price_per_1m < 5.0`;
-  } else if (budget === 'high') {
-    query += ` AND m.is_free = 0`;
-  }
-
-  query += ` ORDER BY cs.value_score DESC LIMIT 10`;
+  const bindings: (string | number)[] = [domain, quality, value];
 
   const results = await db.prepare(query).bind(...bindings).all<ModelProfile>();
 

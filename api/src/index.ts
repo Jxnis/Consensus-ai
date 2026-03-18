@@ -7,6 +7,7 @@ import { registerExactEvmScheme } from "@x402/evm/exact/server";
 import { z } from "zod";
 import { scorePrompt, detectTopicDetailed } from "./router/scorer";
 import { selectBestModel } from "./router/model-registry";
+import { normalizeRoutingBudget as _normalizeRoutingBudget, routingBudgetToCouncilBudget, type RoutingBudget } from "./router/budget";
 import { CouncilEngine } from "./council/engine";
 import { ConsensusRequest, CloudflareBindings } from "./types";
 import OpenAI from "openai";
@@ -19,10 +20,10 @@ app.use("/v1/*", cors());
 // Startup env validation — fail fast on bad deployment
 app.use("*", async (c, next) => {
   if (!c.env.OPENROUTER_API_KEY) {
-    console.error("[CouncilRouter] FATAL: OPENROUTER_API_KEY is not set. Requests will fail.");
+    console.error("[ArcRouter] FATAL: OPENROUTER_API_KEY is not set. Requests will fail.");
   }
   if (!c.env.ADMIN_TOKEN) {
-    console.error("[CouncilRouter] WARNING: ADMIN_TOKEN is not set. Admin endpoint is disabled.");
+    console.error("[ArcRouter] WARNING: ADMIN_TOKEN is not set. Admin endpoint is disabled.");
   }
   return await next();
 });
@@ -64,17 +65,27 @@ async function incrementMetric(kv: KVNamespace, key: string): Promise<void> {
   await addMetricNumber(kv, key, 1);
 }
 
-function rankComplexity(tier: "SIMPLE" | "MEDIUM" | "COMPLEX"): number {
+function rankComplexity(tier: "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING"): number {
+  if (tier === "REASONING") return 4;
   if (tier === "COMPLEX") return 3;
   if (tier === "MEDIUM") return 2;
   return 1;
 }
 
 function maxComplexityTier(
-  a: "SIMPLE" | "MEDIUM" | "COMPLEX",
-  b: "SIMPLE" | "MEDIUM" | "COMPLEX"
-): "SIMPLE" | "MEDIUM" | "COMPLEX" {
+  a: "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING",
+  b: "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING"
+): "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING" {
   return rankComplexity(a) >= rankComplexity(b) ? a : b;
+}
+
+function normalizeRoutingBudget(rawBudget: string | undefined, authTier: string): RoutingBudget {
+  if (authTier === "free" || authTier === "playground") {
+    return "free";
+  }
+  // Paid/x402 default to "auto" if no budget specified
+  const defaultBudget = (authTier === "paid" || authTier === "x402") ? "auto" : "free";
+  return _normalizeRoutingBudget(rawBudget || defaultBudget);
 }
 
 function getChargedPriceUsd(authTier: string, budget: string, complexityTier: string): number {
@@ -86,6 +97,7 @@ function getChargedPriceUsd(authTier: string, budget: string, complexityTier: st
       SIMPLE: 0.001,
       MEDIUM: 0.002,
       COMPLEX: 0.005,
+      REASONING: 0.008,
     };
     return priceByTier[complexityTier] || 0.002;
   }
@@ -223,7 +235,7 @@ app.use("/v1/chat/completions", async (c, next) => {
 
   // Parse body once and enforce tier-specific size limits before reaching handlers.
   let budget = "";
-  let complexityTier: "SIMPLE" | "MEDIUM" | "COMPLEX" = "MEDIUM";
+  let complexityTier: "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING" = "MEDIUM";
   let body: Record<string, unknown>;
 
   try {
@@ -282,6 +294,7 @@ app.use("/v1/chat/completions", async (c, next) => {
     SIMPLE: "$0.001",   // Free models only (~1-2 models, simple factual queries)
     MEDIUM: "$0.002",   // Cheap paid models (3-4 models, moderate reasoning)
     COMPLEX: "$0.005",  // Premium models (4-5 models including GPT-4o/Gemini Pro)
+    REASONING: "$0.005",
   };
 
   const x402Price = X402_PRICE_BY_TIER[complexityTier];
@@ -307,7 +320,7 @@ app.use("/v1/chat/completions", async (c, next) => {
               payTo: c.env.X402_WALLET_ADDRESS,
             },
           ],
-          description: `CouncilRouter — ${complexityTier} query consensus verification`,
+          description: `ArcRouter — ${complexityTier} query consensus verification`,
           mimeType: "application/json",
         },
       },
@@ -335,7 +348,7 @@ app.use("/v1/chat/completions", async (c, next) => {
           network: "eip155:8453",
           payTo: c.env.X402_WALLET_ADDRESS,
         }],
-        description: `CouncilRouter — ${complexityTier} query. Price varies by complexity: SIMPLE ($0.001), MEDIUM ($0.002), COMPLEX ($0.005). Use budget='free' for free tier.`,
+        description: `ArcRouter — ${complexityTier} query. Price varies by complexity: SIMPLE ($0.001), MEDIUM ($0.002), COMPLEX ($0.005). Use budget='free' for free tier.`,
       },
     }, 402);
   }
@@ -369,15 +382,12 @@ app.post("/v1/chat/completions", async (c) => {
   }
 
   const authTier = (c.get("authTier" as never) as string) || "free";
-  let budget = String((body.budget as string) || "").toLowerCase() || "low";
-
-  // Free and playground tiers always use free models
-  if (authTier === "free" || authTier === "playground") {
-    budget = "free";
-  }
+  const rawBudget = typeof body.budget === "string" ? body.budget : undefined;
+  const routingBudget = normalizeRoutingBudget(rawBudget, authTier);
+  const councilBudget = routingBudgetToCouncilBudget(routingBudget);
 
   // Use pre-scored complexity from middleware if available (avoids redundant scoring)
-  const preScored = c.get("complexityTier" as never) as "SIMPLE" | "MEDIUM" | "COMPLEX" | undefined;
+  const preScored = c.get("complexityTier" as never) as "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING" | undefined;
   const complexity = preScored ? { tier: preScored } : scorePrompt(sanitizedPrompt);
   const engine = new CouncilEngine(c.env);
 
@@ -387,7 +397,7 @@ app.post("/v1/chat/completions", async (c) => {
 
   const request: ConsensusRequest = {
     prompt: sanitizedPrompt,
-    budget: ["free", "low", "medium", "high"].includes(budget) ? (budget as ConsensusRequest["budget"]) : "low",
+    budget: councilBudget,
     reliability: (body.reliability === "high" ? "high" : "standard"),
     mode,
   };
@@ -427,15 +437,16 @@ app.post("/v1/chat/completions", async (c) => {
     const routeCache = new RouteCache(c.env.CONSENSUS_CACHE);
 
     // Get top 3 models from D1 for failover chain
-    // First check cache to skip D1 query
+    // First check cache to skip D1 query (unless bypass requested)
+    const bypassCache = body.bypass_cache === true;
     let candidateModels: Array<{ id: string; name: string; provider: string; input_price: number; output_price: number }> = [];
     let dataSource = 'fallback_registry';
 
     try {
       if (c.env.SCORE_DB) {
         // Check cache first (saves ~4ms D1 query)
-        const cacheVersion = await routeCache.getCacheVersion();
-        const cachedModelId = await routeCache.getCachedRouteWithVersion(topic, request.budget || "medium", cacheVersion);
+        const cacheVersion = bypassCache ? null : await routeCache.getCacheVersion();
+        const cachedModelId = bypassCache ? null : await routeCache.getCachedRouteWithVersion(topic, routingBudget, cacheVersion);
 
         if (cachedModelId) {
           // Cache hit! Use cached model as primary candidate
@@ -449,7 +460,7 @@ app.post("/v1/chat/completions", async (c) => {
 
             // Still get backups from D1 for failover
             const { getModelsForDomain } = await import('./db/queries');
-            const backupModels = await getModelsForDomain(c.env.SCORE_DB, topic, request.budget || "medium");
+            const backupModels = await getModelsForDomain(c.env.SCORE_DB, topic, routingBudget, complexity.tier);
             if (backupModels && backupModels.length > 1) {
               // Add top 2 backups (excluding cached model if it appears)
               const backups = backupModels.filter(m => m.id !== cachedModelId).slice(0, 2);
@@ -481,8 +492,8 @@ app.post("/v1/chat/completions", async (c) => {
               semanticResult = await semanticRouter.route(
                 query,
                 topLevelDomain,
-                request.budget || "medium",
-                topicDetection.confidence
+                routingBudget,
+                complexity.tier
               );
 
               if (semanticResult && semanticResult.semantic_enabled) {
@@ -496,7 +507,7 @@ app.post("/v1/chat/completions", async (c) => {
                   console.log(`[Semantic Router] Selected ${semanticResult.model_id} (score: ${semanticResult.final_score.toFixed(3)}, latency: ${semanticResult.semantic_latency_ms}ms)`);
 
                   // Add backup models for failover
-                  const backups = await getModelsForDomain(c.env.SCORE_DB, topic, request.budget || "medium");
+                  const backups = await getModelsForDomain(c.env.SCORE_DB, topic, routingBudget, complexity.tier);
                   if (backups && backups.length > 1) {
                     const backupModels = backups.filter(m => m.id !== semanticResult!.model_id).slice(0, 2);
                     candidateModels.push(...backupModels);
@@ -504,7 +515,7 @@ app.post("/v1/chat/completions", async (c) => {
 
                   // Cache the semantic result
                   c.executionCtx.waitUntil(
-                    routeCache.cacheRoute(topic, request.budget || "medium", semanticResult.model_id, primaryModel.name)
+                    routeCache.cacheRoute(topic, routingBudget, semanticResult.model_id, primaryModel.name)
                   );
                 }
               }
@@ -516,7 +527,7 @@ app.post("/v1/chat/completions", async (c) => {
           // Fallback to traditional D1 routing if semantic routing disabled or failed
           if (candidateModels.length === 0) {
             const { getModelsForDomain } = await import('./db/queries');
-            const models = await getModelsForDomain(c.env.SCORE_DB, topic, request.budget || "medium");
+            const models = await getModelsForDomain(c.env.SCORE_DB, topic, routingBudget, complexity.tier);
 
             if (models && models.length > 0) {
               candidateModels = models.slice(0, 3); // Top 3 models
@@ -525,7 +536,7 @@ app.post("/v1/chat/completions", async (c) => {
 
               // Cache the top model for future requests (async, don't block)
               c.executionCtx.waitUntil(
-                routeCache.cacheRoute(topic, request.budget || "medium", models[0].id, models[0].name)
+                routeCache.cacheRoute(topic, routingBudget, models[0].id, models[0].name)
               );
             }
           }
@@ -539,7 +550,7 @@ app.post("/v1/chat/completions", async (c) => {
     if (candidateModels.length === 0) {
       console.log(`[Smart Router] Using fallback registry`);
       const topLevelTopic = topic.split('/')[0] as any;
-      const fallback = selectBestModel(topLevelTopic, complexity.tier, request.budget || "medium");
+      const fallback = selectBestModel(topLevelTopic, complexity.tier, councilBudget);
       candidateModels = [{
         id: fallback.id,
         name: fallback.name,
@@ -561,13 +572,29 @@ app.post("/v1/chat/completions", async (c) => {
     }
 
     if (healthyModels.length === 0) {
-      console.error('[Smart Router] All candidate models are circuit-broken!');
-      c.executionCtx.waitUntil(incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`));
-      return c.json({
-        error: 'All models unavailable',
-        message: 'All candidate models are currently failing. Please try again later.',
-        request_id: requestId,
-      }, 503);
+      // Last resort: try hardcoded fallback registry (known-working models)
+      console.warn('[Smart Router] All D1 candidates circuit-broken, trying fallback registry');
+      const topLevelTopic = topic.split('/')[0] as any;
+      const fallback = selectBestModel(topLevelTopic, complexity.tier, councilBudget);
+      const fallbackHealthy = await circuitBreaker.isModelHealthy(fallback.id);
+      if (fallbackHealthy) {
+        healthyModels.push({
+          id: fallback.id,
+          name: fallback.name,
+          provider: 'Unknown',
+          input_price: fallback.inputPricePer1M,
+          output_price: fallback.outputPricePer1M,
+        });
+        dataSource = 'fallback_registry';
+      } else {
+        console.error('[Smart Router] All models including fallback are circuit-broken!');
+        c.executionCtx.waitUntil(incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:errors_total`));
+        return c.json({
+          error: 'All models unavailable',
+          message: 'All candidate models are currently failing. Please try again later.',
+          request_id: requestId,
+        }, 503);
+      }
     }
 
     // Initialize OpenAI client
@@ -575,8 +602,8 @@ app.post("/v1/chat/completions", async (c) => {
       baseURL: 'https://openrouter.ai/api/v1',
       apiKey: c.env.OPENROUTER_API_KEY,
       defaultHeaders: {
-        'HTTP-Referer': 'https://councilrouter.ai',
-        'X-Title': 'CouncilRouter',
+        'HTTP-Referer': 'https://arcrouter.ai',
+        'X-Title': 'ArcRouter',
       },
     });
 
@@ -624,7 +651,7 @@ app.post("/v1/chat/completions", async (c) => {
                     topic,
                     topic_confidence: topicDetection.confidence,
                     complexity: complexity.tier,
-                    budget: request.budget || 'medium',
+                    budget: routingBudget,
                     selected_model: model.id,
                     data_source: dataSource,
                     latency_ms: totalLatency,
@@ -654,7 +681,7 @@ app.post("/v1/chat/completions", async (c) => {
                     topic,
                     topic_confidence: topicDetection.confidence,
                     complexity: complexity.tier,
-                    budget: request.budget || 'medium',
+                    budget: routingBudget,
                     selected_model: model.id,
                     data_source: dataSource,
                     latency_ms: totalLatency,
@@ -680,12 +707,12 @@ app.post("/v1/chat/completions", async (c) => {
               'Content-Type': 'text/event-stream',
               'Cache-Control': 'no-cache',
               'Connection': 'keep-alive',
-              'X-CouncilRouter-Mode': 'default',
-              'X-CouncilRouter-Model': model.id,
-              'X-CouncilRouter-Topic': topic,
-              'X-CouncilRouter-Budget': request.budget || 'medium',
-              'X-CouncilRouter-Confidence': topicDetection.confidence.toFixed(2),
-              'X-CouncilRouter-Failover-Count': String(failoverCount),
+              'X-ArcRouter-Mode': 'default',
+              'X-ArcRouter-Model': model.id,
+              'X-ArcRouter-Topic': topic,
+              'X-ArcRouter-Budget': routingBudget,
+              'X-ArcRouter-Confidence': topicDetection.confidence.toFixed(2),
+              'X-ArcRouter-Failover-Count': String(failoverCount),
             },
           });
         } else {
@@ -718,7 +745,7 @@ app.post("/v1/chat/completions", async (c) => {
                 topic,
                 topic_confidence: topicDetection.confidence,
                 complexity: complexity.tier,
-                budget: request.budget || 'medium',
+                budget: routingBudget,
                 selected_model: model.id,
                 data_source: dataSource,
                 latency_ms: latency,
@@ -739,7 +766,7 @@ app.post("/v1/chat/completions", async (c) => {
               topic_detected: topic,
               topic_confidence: topicDetection.confidence,
               complexity_tier: complexity.tier,
-              budget: request.budget || 'medium',
+              budget: routingBudget,
               data_source: dataSource,
               failover_count: failoverCount,
             },
@@ -776,7 +803,7 @@ app.post("/v1/chat/completions", async (c) => {
           topic,
           topic_confidence: topicDetection.confidence,
           complexity: complexity.tier,
-          budget: request.budget || 'medium',
+          budget: routingBudget,
           selected_model: healthyModels[0].id, // Log the first attempted model
           data_source: dataSource,
           latency_ms: null, // No successful response
@@ -798,14 +825,14 @@ app.post("/v1/chat/completions", async (c) => {
 
   try {
     const consensusStartedAt = Date.now();
-    console.log(`[Monitoring] runConsensus:start request_id=${requestId} tier=${authTier} budget=${budget} stream=${wantsStream}`);
+    console.log(`[Monitoring] runConsensus:start request_id=${requestId} tier=${authTier} budget=${councilBudget} stream=${wantsStream}`);
     const result = await engine.runConsensus(request, complexity.tier);
     const consensusLatencyMs = Date.now() - consensusStartedAt;
     const totalLatencyMs = Date.now() - requestStartedAt;
     console.log(`[Monitoring] runConsensus:done request_id=${requestId} latency_ms=${consensusLatencyMs} total_ms=${totalLatencyMs}`);
 
     const estimatedTotalCostUsd = result.monitoring?.estimatedTotalCostUsd ?? 0;
-    const chargedPriceUsd = getChargedPriceUsd(authTier, budget, complexity.tier);
+    const chargedPriceUsd = getChargedPriceUsd(authTier, routingBudget, complexity.tier);
     const marginAlert = estimatedTotalCostUsd > chargedPriceUsd;
 
     // 52a/52c/52d/52e monitoring metrics
@@ -866,7 +893,7 @@ app.post("/v1/chat/completions", async (c) => {
         confidence: result.confidence,
         tier: result.complexity,
         votes: result.votes,
-        budget,
+        budget: councilBudget,
         synthesized: result.synthesized ?? false,
         cached: result.cached,
         mode_used: mode,  // TASK-A5: Track which mode was used
@@ -928,7 +955,7 @@ app.post("/v1/chat/completions", async (c) => {
         confidence: result.confidence,
         tier: result.complexity,
         votes: result.votes,
-        budget,
+        budget: councilBudget,
         synthesized: result.synthesized ?? false,
         cached: result.cached,
         monitoring: result.monitoring,
@@ -963,7 +990,7 @@ app.post("/v1/chat/completions", async (c) => {
     }
 
     // Log internally, return generic message to avoid leaking internals
-    console.error(`[CouncilRouter] Consensus error request_id=${requestId}:`, error instanceof Error ? error.message : String(error));
+    console.error(`[ArcRouter] Consensus error request_id=${requestId}:`, error instanceof Error ? error.message : String(error));
 
     if (wantsStream) {
       // Emit streaming error so clients don't hang waiting for [DONE] (50d)
@@ -999,10 +1026,10 @@ app.get("/health", async (c) => {
 // Root info endpoint
 app.get("/", (c) => {
   return c.json({
-    name: "CouncilRouter API",
+    name: "ArcRouter API",
     status: "operational",
     version: "1.0.0",
-    docs: "https://councilrouter.ai/docs",
+    docs: "https://arcrouter.ai/docs",
     tiers: {
       free: "No API key required. Free-tier models only, 20 requests/hour.",
       paid: "API key required. All budget tiers, Stripe metered billing, $0.002 per request.",

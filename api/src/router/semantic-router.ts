@@ -10,7 +10,8 @@
  * 6. Fallback to lexical routing if semantic step fails/times out
  */
 
-import { CloudflareBindings } from '../types';
+import type { CloudflareBindings, ComplexityTier } from '../types';
+import { normalizeRoutingBudget, type RoutingBudget } from './budget';
 
 export interface SemanticRoutingResult {
   model_id: string;
@@ -35,12 +36,15 @@ const SHORTLIST_SIZE = 10;
 const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
 const EMBEDDING_VERSION = 'v1';
 
-// Weights for final ranking
-const WEIGHTS = {
-  semantic: 0.55,
-  value: 0.35,
-  reliability: 0.10,
-};
+function getComplexityWeights(complexity: ComplexityTier): { semantic: number; value: number; reliability: number } {
+  if (complexity === "SIMPLE") {
+    return { semantic: 0.45, value: 0.45, reliability: 0.10 };
+  }
+  if (complexity === "COMPLEX" || complexity === "REASONING") {
+    return { semantic: 0.60, value: 0.25, reliability: 0.15 };
+  }
+  return { semantic: 0.55, value: 0.35, reliability: 0.10 };
+}
 
 export class SemanticRouter {
   private ai: Ai;
@@ -59,15 +63,17 @@ export class SemanticRouter {
    * @param query User's prompt
    * @param domain Detected domain from lexical classifier
    * @param budget User's budget tier
-   * @param confidence Confidence score from lexical classifier (0-1)
+   * @param complexity Complexity tier from prompt scoring
    */
   async route(
     query: string,
     domain: string,
     budget: string,
-    confidence: number
+    complexity: ComplexityTier
   ): Promise<SemanticRoutingResult> {
     const startTime = Date.now();
+    const normalizedBudget = normalizeRoutingBudget(budget);
+    const weights = getComplexityWeights(complexity);
 
     // Feature flag check
     if (!this.enabled) {
@@ -76,7 +82,7 @@ export class SemanticRouter {
 
     try {
       // Step 1: Get shortlist from D1 (top models by value_score in this domain)
-      const shortlist = await this.getShortlist(domain, budget, SHORTLIST_SIZE);
+      const shortlist = await this.getShortlist(domain, normalizedBudget, complexity, SHORTLIST_SIZE);
 
       if (shortlist.length === 0) {
         throw new Error(`No models found for domain: ${domain}`);
@@ -98,7 +104,8 @@ export class SemanticRouter {
       const rankedModels = this.rankBySemanticSimilarity(
         queryEmbedding,
         modelEmbeddings,
-        shortlist
+        shortlist,
+        weights
       );
 
       const topModel = rankedModels[0];
@@ -120,7 +127,7 @@ export class SemanticRouter {
       const fallback_reason = err instanceof Error ? err.message : 'Unknown error';
       console.error(`[SemanticRouter] Failed, falling back to DB:`, fallback_reason);
 
-      const shortlist = await this.getShortlist(domain, budget, 1);
+      const shortlist = await this.getShortlist(domain, normalizedBudget, complexity, 1);
       const semantic_latency_ms = Date.now() - startTime;
 
       if (shortlist.length === 0) {
@@ -146,9 +153,29 @@ export class SemanticRouter {
    */
   private async getShortlist(
     domain: string,
-    budget: string,
+    budget: RoutingBudget,
+    complexity: ComplexityTier,
     limit: number
   ): Promise<Array<{ model_id: string; value_score: number; reliability_pct: number }>> {
+    const budgetFilter = budget === "free" ? " AND m.is_free = 1" : " AND m.is_free = 0";
+    const reasoningFilter = complexity === "REASONING"
+      ? ` AND (
+          lower(m.id) LIKE '%o3%' OR
+          lower(m.id) LIKE '%o4%' OR
+          lower(m.id) LIKE '%r1%' OR
+          lower(m.id) LIKE '%qwq%' OR
+          lower(m.id) LIKE '%reason%'
+        )`
+      : "";
+    const complexityOrder =
+      complexity === "REASONING"
+        ? "(cs.quality_score * 0.9 + cs.value_score * 0.1)"
+        : complexity === "COMPLEX"
+          ? "(cs.quality_score * 0.8 + cs.value_score * 0.2)"
+          : complexity === "SIMPLE"
+            ? "(cs.quality_score * 0.3 + cs.value_score * 0.7)"
+            : "(cs.quality_score * 0.5 + cs.value_score * 0.5)";
+
     // Try exact domain first, then parent domain if subdomain
     const domains = domain.includes('/') ? [domain, domain.split('/')[0]] : [domain];
 
@@ -160,7 +187,8 @@ export class SemanticRouter {
            FROM composite_scores cs
            JOIN models m ON m.id = cs.model_id
            WHERE cs.domain = ?
-           ORDER BY cs.value_score DESC
+             AND m.is_available = 1${budgetFilter}${reasoningFilter}
+           ORDER BY ${complexityOrder} DESC
            LIMIT ?`
         )
         .bind(d, limit)
@@ -179,7 +207,8 @@ export class SemanticRouter {
          FROM composite_scores cs
          JOIN models m ON m.id = cs.model_id
          WHERE cs.domain = 'general'
-         ORDER BY cs.value_score DESC
+           AND m.is_available = 1${budgetFilter}${reasoningFilter}
+         ORDER BY ${complexityOrder} DESC
          LIMIT ?`
       )
       .bind(limit)
@@ -300,7 +329,8 @@ export class SemanticRouter {
   private rankBySemanticSimilarity(
     queryEmbedding: Float32Array,
     modelEmbeddings: ModelEmbedding[],
-    shortlist: Array<{ model_id: string; value_score: number; reliability_pct: number }>
+    shortlist: Array<{ model_id: string; value_score: number; reliability_pct: number }>,
+    weights: { semantic: number; value: number; reliability: number }
   ): Array<{
     model_id: string;
     semantic_score: number;
@@ -324,9 +354,9 @@ export class SemanticRouter {
       const norm_reliability = Math.max(0, Math.min(1, reliability_score / 100)); // reliability_pct is 0-100
 
       const final_score =
-        norm_semantic * WEIGHTS.semantic +
-        norm_value * WEIGHTS.value +
-        norm_reliability * WEIGHTS.reliability;
+        norm_semantic * weights.semantic +
+        norm_value * weights.value +
+        norm_reliability * weights.reliability;
 
       return {
         model_id: modelEmb.model_id,

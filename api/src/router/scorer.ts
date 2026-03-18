@@ -17,6 +17,13 @@ const MEDIUM_MARKERS = [
   /relationship/i, /implication/i
 ];
 
+const REASONING_MARKERS = [
+  /\b(step by step|chain of thought|think through|reason about|proof)\b/i,
+  /\b(why does|explain why|prove that|derive|deduce|infer)\b/i,
+  /\b(compare and contrast|trade.?offs?|pros?\s+and\s+cons?)\b/i,
+  /\b(plan|strategy|architecture|system design)\b/i,
+];
+
 /**
  * LocalScorer: Analyzes prompt complexity in <1ms without LLM calls.
  * Follows the "ClawRouter" pattern of fast, deterministic routing.
@@ -24,6 +31,7 @@ const MEDIUM_MARKERS = [
 export function scorePrompt(prompt: string): ComplexityScore {
   const length = prompt.length;
   let score = 0;
+  let reasoningHits = 0;
 
   // Length based scoring (improved)
   if (length > 1000) score += 40;
@@ -41,10 +49,22 @@ export function scorePrompt(prompt: string): ComplexityScore {
     if (marker.test(prompt)) score += 5;
   });
 
+  REASONING_MARKERS.forEach(marker => {
+    if (marker.test(prompt)) {
+      reasoningHits += 1;
+      score += 10;
+    }
+  });
+
   // Determine Tier (Refined thresholds)
   let tier: ComplexityTier = "SIMPLE";
   if (score > 35) tier = "COMPLEX";      // Was 40
   else if (score > 12) tier = "MEDIUM";  // Raised from 8 to reduce over-classification
+
+  // REASONING tier: only for difficult prompts with explicit reasoning patterns.
+  if (tier === "COMPLEX" && reasoningHits >= 2) {
+    tier = "REASONING";
+  }
 
   return {
     tier,
@@ -81,7 +101,7 @@ const TOP_LEVEL_MARKERS = {
     // Languages and frameworks
     /\b(typescript|python|javascript|react|vue|angular|rust|go|java|c\+\+|ruby|php)\b/i,
     // Code-specific terms
-    /\b(API|endpoint|SQL|query|database|server|frontend|backend|docker|kubernetes)\b/i,
+    /\b(API|endpoint|SQL|query|database|server|frontend|backend|docker|kubernetes|dockerfile)\b/i,
     // CS/algorithm theory terms
     /\b(time complexity|space complexity|big[\s-]?o|O\(n|O\(log|merge sort|quicksort|binary search|hash\s?map|linked list|data structure)\b/i,
     // Syntax indicators
@@ -90,10 +110,12 @@ const TOP_LEVEL_MARKERS = {
     // Explicit code instructions (boosted scoring)
     /write\s+(a|an)\s+(python|javascript|typescript|rust|go|java|c\+\+|sql|bash|shell)/i,
     /\b(code review|pull request|git|github|commit|branch)\b/i,
+    // DevOps/Infrastructure (strong signal)
+    /\b(create|write|build)\s+(a|an)?\s*(dockerfile|kubernetes|terraform|helm|ansible)/i,
   ],
   math: [
-    // Math operations
-    /\b(calculate|compute|solve|equation|integral|derivative|probability|statistical|algebra|proof|theorem)\b/i,
+    // Math operations - STRENGTHENED calculus terms
+    /\b(calculate|compute|solve|equation|integral|integrate|derivative|differentiate|probability|statistical|algebra|proof|theorem)\b/i,
     /\b(matrix|vector|eigenvalue|polynomial|logarithm|factorial|limit|summation)\b/i,
     // Math topics
     /\b(calculus|geometry|trigonometry|arithmetic|quadratic|linear algebra|differential)\b/i,
@@ -101,34 +123,43 @@ const TOP_LEVEL_MARKERS = {
     // Statistics - STRENGTHENED
     /\b(mean|median|mode|variance|standard deviation|distribution|regression|hypothesis|p-value)\b/i,
     /\b(dataset|correlation|normal distribution|statistical significance)\b/i,
-    // Math notation
+    // Math notation and functions
     /[=+\-*/^].*\d/, // math operators with numbers
-    /\b(sin|cos|tan|sqrt|log|exp|sum|integral)\b/i,
+    /\b(sin|cos|tan|sqrt|log|exp|sum)\b/i,
+    // Calculus-specific patterns (strong signal to avoid code misclassification)
+    /\b(integrate|integral|derivative|differentiate).*(from|to|with respect to|dx|dy|dt|π|pi)\b/i,
   ],
   science: [
     // Physics - EXPANDED
     /\b(physics|force|energy|motion|velocity|acceleration|gravity|newton|mass|momentum|friction)\b/i,
     /\b(quantum|electron|photon|atom|nuclear|radiation|electromagnetic|wave|particle)\b/i,
     /\b(thermodynamic|heat|temperature|pressure|relativity|mechanics)\b/i,
-    // Physics concepts (named principles/effects)
+    // Physics concepts (named principles/effects/phenomena)
     /\b(Heisenberg|Schrodinger|Schrödinger|uncertainty principle|entanglement|superposition|Bohr|Planck)\b/i,
+    /\b(Doppler|refraction|diffraction|interference|polarization|induction|capacitance|impedance)\b/i,
+    /\b(fission|fusion|decay|half-life|isotope|radioactiv)\b/i,
     // Chemistry - EXPANDED
     /\b(chemistry|molecule|element|compound|reaction|chemical|bond|catalyst|acid|base|ion)\b/i,
     /\b(periodic table|valence|oxidation|synthesis|solvent|solution)\b/i,
     // Biology - EXPANDED
     /\b(biology|cell|DNA|RNA|gene|protein|enzyme|organism|species|evolution)\b/i,
-    /\b(photosynthesis|respiration|mitosis|meiosis|chromosome|inheritance|ecosystem)\b/i,
-    /\b(bacteria|virus|infection|immune|vaccine|antibody|tissue|organ)\b/i,
+    /\b(photosynthesis|respiration|mitosis|meiosis|chromosome|inheritance|ecosystem|replication)\b/i,
+    /\b(bacteria|virus|infection|immune|immunity|vaccine|antibody|tissue|organ)\b/i,
     // Astronomy/space
     /\b(black hole|star|galaxy|universe|cosmic|nebula|supernova|dark matter|dark energy|solar system|asteroid|comet)\b/i,
     // General science terms
     /\b(experiment|hypothesis|theory|scientific method|observation|data|measurement)\b/i,
     /\b(climate|atmosphere|earth|geology|earthquake|volcano|ocean|planet)\b/i,
+    // "How does X work?" patterns for science topics (strong signal)
+    /\b(how does|how do|what causes|what makes)\b.{0,30}\b(work|happen|occur|form|function)\b/i,
   ],
   writing: [
-    /\b(write|essay|article|blog|summarize|paraphrase|rewrite|translate|creative|story|poem|email|letter)\b/i,
+    /\b(write|essay|article|blog|summarize|paraphrase|rewrite|creative|story|poem|email|letter|caption)\b/i,
     /\b(tone|style|persuasive|narrative|draft|edit|proofread|proposal|report|document)\b/i,
     /\b(paragraph|sentence|grammar|vocabulary|rhetoric|composition)\b/i,
+    // Marketing and content creation
+    /\b(product description|marketing|content|copy|ad|advertisement|press release|whitepaper|newsletter)\b/i,
+    /\b(headline|tagline|slogan|brand|pitch)\b/i,
   ],
   reasoning: [
     /\b(logic|puzzle|deduce|infer|strategy|plan|optimize|multi-step|reasoning|syllogism)\b/i,
@@ -149,6 +180,8 @@ const NEGATIVE_SIGNALS: Record<string, RegExp[]> = {
   writing: [
     /write\s+(a|an)\s+(function|class|script|program|code|algorithm)/i,
     /write.*python|javascript|typescript|sql|bash/i,
+    // Simple translation is general, not writing
+    /translate\s+["']?\w+["']?\s+(to|into|in)\s+\w+/i,
   ],
   // If asking "what is X" about a science topic, it's science not general
   general: [
@@ -233,8 +266,19 @@ export function detectTopicDetailed(prompt: string): TopicDetectionResult {
   }
 
   // Boost science for explicit science questions that might be misclassified as general
-  if (/\b(explain|describe|what is|how does|why does|how do)\b.*\b(physics|chemistry|biology|science|scientific|quantum|atom|molecule|cell|gene|black hole|star|galaxy|planet|gravity|evolution|photosynthesis|DNA|RNA|electron|proton|neutron)\b/i.test(prompt)) {
+  if (/\b(explain|describe|what is|how does|why does|how do|what causes|what makes)\b.*\b(physics|chemistry|biology|science|scientific|quantum|atom|molecule|cell|gene|black hole|star|galaxy|planet|gravity|evolution|photosynthesis|DNA|RNA|electron|proton|neutron|vaccine|immunity|immune|Doppler|fission|fusion|thermodynamic|electromagnetic|spectrum|replication|respiration|mitosis|ecosystem)\b/i.test(prompt)) {
     topLevelScores.science += 15;
+  }
+
+  // "laws of thermodynamics" style prompts should strongly bias to science.
+  if (/\b(laws?\s+of)\b.{0,24}\b(thermodynamics?|motion|physics|conservation)\b/i.test(prompt)) {
+    topLevelScores.science += 20;
+  }
+
+  // Matrix notation can look like code due to brackets. Boost math when matrix terms exist.
+  if (/\[\[.*\]\]/.test(prompt) && /\b(matrix|inverse|determinant|eigenvalue|eigenvector)\b/i.test(prompt)) {
+    topLevelScores.math += 20;
+    topLevelScores.code -= 10;
   }
 
   // Find best top-level category

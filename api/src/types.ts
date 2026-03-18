@@ -1,4 +1,4 @@
-export type ComplexityTier = "SIMPLE" | "MEDIUM" | "COMPLEX";
+export type ComplexityTier = "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING";
 
 export interface ComplexityScore {
   tier: ComplexityTier;
@@ -20,7 +20,7 @@ export interface ModelInfo {
 
 export interface ConsensusRequest {
   prompt: string;
-  budget?: "free" | "low" | "medium" | "high";
+  budget?: "free" | "low" | "medium" | "high" | "economy" | "auto" | "premium";
   reliability?: "standard" | "high";
   mode?: "default" | "council";  // TASK-A5: Router mode (routing logic in Phase 4)
 }

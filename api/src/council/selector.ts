@@ -76,6 +76,15 @@ export class CouncilSelector {
           3
         );
         break;
+
+      case "REASONING":
+        // Reasoning tier: include premium reasoning models (o3, o1 can be $15-50/1M)
+        const reasoningTier = candidates.filter(m => m.pricePer1M >= 0.5 && m.pricePer1M < 50.0);
+        selected = this.pickByQuality(
+          reasoningTier.length >= 3 ? reasoningTier : candidates,
+          3
+        );
+        break;
     }
 
     // Fallback: ensure minimum 3 models
