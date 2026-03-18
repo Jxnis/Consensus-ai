@@ -10,7 +10,7 @@ const steps = [
   {
     num: "02",
     title: "Query Benchmark DB",
-    body: "D1 SQL query fetches models ranked by value score (quality ÷ cost) for your topic and budget tier. Real benchmark data from HuggingFace, LiveBench, and GPQA. Falls back to hardcoded registry if DB unavailable.",
+    body: "D1 SQL query fetches models ranked by value score (quality ÷ cost) for your topic and budget tier. Real benchmark data from HuggingFace, LiveBench, and LiveCodeBench. Falls back to hardcoded registry if DB unavailable.",
   },
   {
     num: "03",

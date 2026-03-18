@@ -26,7 +26,7 @@ const plans = [
     price: "$0.002",
     period: "/ request",
     features: [
-      "340+ models, smart routing",
+      "345+ models, smart routing",
       "Council mode available",
       "1,000 req / hour",
       "Stripe metered billing",

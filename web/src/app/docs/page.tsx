@@ -111,7 +111,7 @@ export default function DocsPage() {
               <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-[0.2em] block">Documentation</span>
               <h1 className="font-heading text-4xl lg:text-5xl text-foreground tracking-tight">ArcRouter Docs</h1>
               <p className="text-muted-foreground leading-relaxed max-w-2xl text-lg">
-                Benchmark-verified LLM router with 340+ models. Automatically route any prompt to the best AI model based on real benchmark scores from HuggingFace, LiveBench, and LiveCodeBench. Two modes: smart routing (default) selects the best single model per topic, or council mode queries 3-7 models for consensus verification. OpenAI-compatible — drop in with any SDK.
+                Benchmark-verified LLM router with 345+ models. Automatically route any prompt to the best AI model based on real benchmark scores from HuggingFace, LiveBench, and LiveCodeBench. Two modes: smart routing (default) selects the best single model per topic, or council mode queries 3-7 models for consensus verification. OpenAI-compatible — drop in with any SDK.
               </p>
               <div className="flex gap-4 pt-4">
                 <button 
@@ -176,7 +176,7 @@ const council = await client.chat.completions.create({
   model: "arc-router-v1",
   messages: [{ role: "user", content: "Is P=NP?" }],
   mode: "council",     // Query 3-7 models
-  budget: "low",       // "free" | "low" | "medium" | "high"
+  budget: "economy",   // "free" | "economy" | "auto" | "premium"
 } as any);
 
 console.log(council.consensus); // { confidence, votes, ... }`}
@@ -321,8 +321,8 @@ console.log(council.consensus); // { confidence, votes, ... }`}
                             <tr>
                                 <td className="p-4 font-bold text-foreground">budget</td>
                                 <td className="p-4 text-muted-foreground">string</td>
-                                <td className="p-4 text-muted-foreground">&quot;low&quot;</td>
-                                <td className="p-4 text-muted-foreground">&quot;free&quot; — free models only. &quot;low&quot; — under $0.50/1M tokens. &quot;medium&quot; — under $5/1M. &quot;high&quot; — under $10/1M.</td>
+                                <td className="p-4 text-muted-foreground">&quot;auto&quot;</td>
+                                <td className="p-4 text-muted-foreground">&quot;free&quot; — free models only. &quot;economy&quot; — favor cheap models. &quot;auto&quot; — balanced (default). &quot;premium&quot; — best quality. Legacy aliases: low/medium/high still accepted.</td>
                             </tr>
                             <tr>
                                 <td className="p-4 font-bold text-foreground">stream</td>
@@ -505,7 +505,7 @@ data: [DONE]`}
                 <div>
                    <h2 className="font-heading text-2xl text-foreground mb-4">Models & Scores</h2>
                    <p className="text-muted-foreground">
-                     ArcRouter maintains a database of 340+ models with benchmark scores across 6 domains. Scores are refreshed daily from HuggingFace Open LLM Leaderboard, LiveBench, and LiveCodeBench.
+                     ArcRouter maintains a database of 345+ models with benchmark scores across 6 domains. Scores are refreshed daily from HuggingFace Open LLM Leaderboard, LiveBench, and LiveCodeBench.
                    </p>
                 </div>
 
@@ -515,11 +515,11 @@ data: [DONE]`}
                     <div className="grid md:grid-cols-2 gap-4">
                       {[
                         { domain: "math", desc: "GSM8K, MATH, competition mathematics" },
-                        { domain: "coding", desc: "LiveCodeBench, HumanEval, code generation" },
+                        { domain: "code", desc: "LiveCodeBench, HumanEval, code generation" },
                         { domain: "reasoning", desc: "ARC, HellaSwag, logical reasoning" },
                         { domain: "science", desc: "GPQA, MMLU-Pro, scientific knowledge" },
-                        { domain: "language", desc: "WinoGrande, translation, comprehension" },
-                        { domain: "instruction", desc: "IFEval, MT-Bench, instruction following" },
+                        { domain: "writing", desc: "Creative writing, professional content, editing" },
+                        { domain: "general", desc: "General knowledge, translation, comprehension" },
                       ].map((item) => (
                         <div key={item.domain} className="p-4 border border-border rounded-lg bg-card">
                           <span className="font-mono text-xs font-bold text-foreground uppercase">{item.domain}</span>
@@ -722,7 +722,7 @@ opencode
                 <div className="bg-muted/30 border border-border rounded-xl p-6">
                     <h3 className="font-heading text-lg mb-3 text-foreground">Budget Tiers</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                        The <code className="text-xs bg-muted px-2 py-1 rounded">budget</code> parameter controls which models are eligible. Free-tier users are always restricted to free models regardless of this parameter.
+                        The <code className="text-xs bg-muted px-2 py-1 rounded">budget</code> parameter controls cost sensitivity. Paid users default to <code className="text-xs bg-muted px-2 py-1 rounded">&quot;auto&quot;</code>. Free-tier users are always restricted to free models.
                     </p>
                     <div className="space-y-2 font-mono text-xs">
                         <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
@@ -730,16 +730,16 @@ opencode
                             <span className="text-muted-foreground">Free models only (cost: $0)</span>
                         </div>
                         <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
-                            <span className="text-foreground">&quot;low&quot; (default)</span>
-                            <span className="text-muted-foreground">Models under $0.50 / 1M tokens</span>
+                            <span className="text-foreground">&quot;economy&quot;</span>
+                            <span className="text-muted-foreground">Strongly prefer cheap models (alias: &quot;low&quot;)</span>
                         </div>
                         <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
-                            <span className="text-foreground">&quot;medium&quot;</span>
-                            <span className="text-muted-foreground">Models under $5.00 / 1M tokens</span>
+                            <span className="text-foreground">&quot;auto&quot; (default)</span>
+                            <span className="text-muted-foreground">Balanced quality vs cost (alias: &quot;medium&quot;)</span>
                         </div>
                         <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
-                            <span className="text-foreground">&quot;high&quot;</span>
-                            <span className="text-muted-foreground">Models under $10.00 / 1M tokens</span>
+                            <span className="text-foreground">&quot;premium&quot;</span>
+                            <span className="text-muted-foreground">Best quality, ignore cost (alias: &quot;high&quot;)</span>
                         </div>
                     </div>
                 </div>

@@ -39,6 +39,7 @@ const PlaygroundNew = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
+          mode: 'council',
           budget: 'free',
         }),
       });

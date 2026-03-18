@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     default: 'ArcRouter — Smart LLM Router | Best Model for Every Prompt',
     template: '%s | ArcRouter',
   },
-  description: 'Route any prompt to the best AI model automatically. Up to 90% cheaper than GPT-4o with benchmark-verified quality. 340+ models, 24 topic categories, semantic routing.',
+  description: 'Route any prompt to the best AI model automatically. Up to 90% cheaper than GPT-4o with benchmark-verified quality. 345+ models, 24 topic categories, semantic routing.',
   keywords: ['LLM router', 'AI model router', 'smart routing', 'benchmark scores', 'cost optimization', 'OpenAI alternative', 'GPT-4o cheaper', 'multi-model', 'AI API', 'language model'],
   authors: [{ name: 'ArcRouter' }],
   creator: 'ArcRouter',
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'ArcRouter — Best Model for Every Prompt, 90% Cheaper',
-    description: 'Auto-route any prompt to the best AI model based on real benchmark scores. 340+ models, 24 topic categories, daily updates. OpenAI SDK compatible.',
+    description: 'Auto-route any prompt to the best AI model based on real benchmark scores. 345+ models, 24 topic categories, daily updates. OpenAI SDK compatible.',
     url: 'https://arcrouter.ai',
     siteName: 'ArcRouter',
     images: [
@@ -105,11 +105,11 @@ export default function RootLayout({
                   price: '0.002',
                   priceCurrency: 'USD',
                   name: 'Developer Tier',
-                  description: '$0.002 per request, 340+ models, 1000 req/hour',
+                  description: '$0.002 per request, 345+ models, 1000 req/hour',
                 },
               ],
               featureList: [
-                'Smart routing across 340+ AI models',
+                'Smart routing across 345+ AI models',
                 '24 granular topic categories',
                 'Semantic routing with embedding-based reranking',
                 'Up to 90% cost savings vs GPT-4o',

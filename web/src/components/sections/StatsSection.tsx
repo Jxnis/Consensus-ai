@@ -2,7 +2,7 @@ import { motion, useInView } from "motion/react";
 import { useRef, useState, useEffect } from "react";
 
 const stats = [
-  { label: "Models tracked", value: 340, suffix: "+", display: undefined, desc: "Daily pricing and benchmark updates from OpenRouter. Smart routing selects best value model per topic." },
+  { label: "Models tracked", value: 345, suffix: "+", display: undefined, desc: "Daily pricing and benchmark updates from OpenRouter. Smart routing selects best value model per topic." },
   { label: "Topic categories", value: 24, suffix: "", display: undefined, desc: "Granular detection: code/frontend, math/calculus, science/physics. Better routing accuracy than broad categories." },
   { label: "Cost savings", value: 90, suffix: "%", display: undefined, desc: "Up to 90% cheaper than GPT-4o by routing to the best model for each topic. Benchmark-verified quality at a fraction of the cost." },
 ];

@@ -535,7 +535,7 @@ export default function RankingsPage() {
                     <li><strong className="text-foreground">HuggingFace Open LLM Leaderboard</strong> — General, reasoning, and science benchmarks across 130+ models</li>
                     <li><strong className="text-foreground">LiveBench</strong> — Monthly refreshed benchmarks for coding, math, reasoning, writing, and data analysis</li>
                     <li><strong className="text-foreground">LiveCodeBench</strong> — Contamination-free code generation benchmark from LeetCode, Codeforces, and AtCoder</li>
-                    <li><strong className="text-foreground">OpenRouter</strong> — Real-time pricing data for 340+ models</li>
+                    <li><strong className="text-foreground">OpenRouter</strong> — Real-time pricing data for 345+ models</li>
                   </ul>
                 </div>
 
