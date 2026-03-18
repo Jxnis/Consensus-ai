@@ -47,7 +47,7 @@ curl https://consensus-api.janis-ellerbrock.workers.dev/v1/chat/completions \
   -d '{
     "model": "arc-router-v1",
     "messages": [{"role": "user", "content": "Explain GPQA Diamond benchmark"}],
-    "budget": "low",
+    "budget": "auto",
     "mode": "default"
   }'
 ```
@@ -73,7 +73,7 @@ print(response.choices[0].message.content)
 council = client.chat.completions.create(
     model="arc-router-v1",
     messages=[{"role": "user", "content": "Review this NDA for liability caps"}],
-    extra_body={"mode": "council", "budget": "low"}
+    extra_body={"mode": "council", "budget": "economy"}
 )
 ```
 
@@ -152,7 +152,7 @@ Response + Routing Metadata
 | `messages` | array | required | OpenAI-format messages |
 | `model` | string | any | Ignored — routing is automatic |
 | `mode` | string | `"default"` | `"default"` (smart route) or `"council"` (consensus) |
-| `budget` | string | `"low"` | `"free"` / `"low"` / `"medium"` / `"high"` |
+| `budget` | string | `"auto"` | `"free"` / `"economy"` / `"auto"` / `"premium"` (legacy: low/medium/high) |
 | `stream` | boolean | `false` | SSE streaming |
 
 **Response headers (default mode):**
@@ -160,7 +160,7 @@ Response + Routing Metadata
 
 ### `GET /v1/models/scores`
 
-Public endpoint. Returns all 340+ models with benchmark scores across 6 domains. No auth required.
+Public endpoint. Returns all 345+ models with benchmark scores across 6 domains. No auth required.
 
 ### `GET /health`
 
@@ -177,13 +177,13 @@ Service health check.
 | **x402** | $0.001–$0.005 / req | Unlimited | USDC on Base |
 | **Team** | Custom | Unlimited | Contact us |
 
-**x402 variable pricing:** SIMPLE $0.001, MEDIUM $0.002, COMPLEX $0.005 — auto-detected from prompt.
+**x402 variable pricing:** SIMPLE $0.001, MEDIUM $0.002, COMPLEX $0.005, REASONING $0.008 — auto-detected from prompt.
 
-**Budget tiers control model selection:**
+**Budget controls cost sensitivity:**
 - `"free"` — free models only ($0)
-- `"low"` — models under $0.50/1M tokens (default)
-- `"medium"` — models under $5.00/1M tokens
-- `"high"` — models under $10.00/1M tokens
+- `"economy"` — strongly prefer cheap models (alias: `"low"`)
+- `"auto"` — balanced quality vs cost (default for paid users, alias: `"medium"`)
+- `"premium"` — best quality, ignore cost (alias: `"high"`)
 
 ---
 
@@ -192,7 +192,7 @@ Service health check.
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌──────────────────┐
 │   web/      │     │   api/          │     │   OpenRouter     │
-│ Next.js 16  │────▶│ Hono + CF       │────▶│   (340+ models)  │
+│ Next.js 16  │────▶│ Hono + CF       │────▶│   (345+ models)  │
 │ Landing +   │     │ Workers         │     │                  │
 │ Playground  │     │                 │     └──────────────────┘
 └─────────────┘     └────────┬────────┘
@@ -224,7 +224,7 @@ Service health check.
 | **HuggingFace LLM Leaderboard v2** | science, math, reasoning, general | Daily 6AM UTC |
 | **LiveBench** | coding, math, reasoning, writing, general | Daily 6AM UTC |
 | **LiveCodeBench** | coding | Daily 6AM UTC |
-| **OpenRouter** | pricing + availability (340+ models) | Daily 6AM UTC |
+| **OpenRouter** | pricing + availability (345+ models) | Daily 6AM UTC |
 
 **Scoring:** Weighted by source reliability → normalized 0-100 → value = quality ÷ (1 + cost × sensitivity) → ranked per domain.
 
