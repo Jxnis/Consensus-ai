@@ -1,5 +1,6 @@
 // TASK-2: Model Performance Registry for Smart Routing (mode=default)
 import { TopicCategory } from './scorer';
+import type { ComplexityTier } from '../types';
 
 export interface ModelProfile {
   id: string;                              // OpenRouter model ID
@@ -91,7 +92,7 @@ export const MODEL_REGISTRY: ModelProfile[] = [
  */
 export function selectBestModel(
   topic: TopicCategory,
-  complexity: 'SIMPLE' | 'MEDIUM' | 'COMPLEX',
+  complexity: ComplexityTier,
   budget: string
 ): ModelProfile {
   let candidates = MODEL_REGISTRY;
