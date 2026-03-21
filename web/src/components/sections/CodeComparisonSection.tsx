@@ -5,7 +5,7 @@ const singleModelCode = `$ query: "Explain OAuth 2.0 authorization code flow"
 
 {
   "response": "OAuth 2.0 authorization code flow involves...",
-  "model": "gpt-4o",
+  "model": "gpt-5",
   "cost": "$0.0075",
   "latency": "2.1s",
   "routing": null
@@ -24,7 +24,7 @@ const consensusCode = `$ query: "Explain OAuth 2.0 authorization code flow"
   },
   "cost": "$0.0008",
   "latency": "1.4s",
-  "savings": "89% vs GPT-4o"
+  "savings": "89% vs GPT-5"
 }`;
 
 const CodeComparisonSection = () => {
@@ -93,7 +93,7 @@ const CodeComparisonSection = () => {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Manual (GPT-4o)
+              Manual (GPT-5)
             </button>
             <button
               onClick={() => setActiveTab("consensus")}

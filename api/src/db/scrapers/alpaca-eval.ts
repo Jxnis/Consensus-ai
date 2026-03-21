@@ -93,7 +93,7 @@ export async function scrapeAlpacaEval(db: D1Database): Promise<ScraperResult> {
     const response = await fetchWithRetry(csvUrl, {
       headers: {
         'Accept': 'text/csv, text/plain, */*',
-        'User-Agent': 'ArcRouter/1.0 (https://arcrouter.ai)',
+        'User-Agent': 'ArcRouter/1.0 (https://arcrouter.com)',
       },
     });
 

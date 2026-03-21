@@ -6,10 +6,10 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'ArcRouter Model Rankings — Live LLM Benchmark Scores',
     description: 'Compare 345+ AI models by benchmark score, price, and value across 6 domains. Updated daily from HuggingFace, LiveBench, and LiveCodeBench.',
-    url: 'https://arcrouter.ai/rankings',
+    url: 'https://arcrouter.com/rankings',
   },
   alternates: {
-    canonical: 'https://arcrouter.ai/rankings',
+    canonical: 'https://arcrouter.com/rankings',
   },
 }
 

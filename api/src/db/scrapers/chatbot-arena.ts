@@ -163,7 +163,7 @@ export async function scrapeChatbotArena(db: D1Database): Promise<ScraperResult>
         response = await fetchWithRetry(endpoint, {
           headers: {
             'Accept': 'application/json',
-            'User-Agent': 'ArcRouter/1.0 (https://arcrouter.ai)',
+            'User-Agent': 'ArcRouter/1.0 (https://arcrouter.com)',
           },
         });
 

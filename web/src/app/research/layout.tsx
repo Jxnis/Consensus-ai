@@ -6,10 +6,10 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'ArcRouter Research — Scientific Benchmark Results',
     description: 'Multi-model consensus vs single-model baselines. 172 test cases, 6 datasets, bootstrap confidence intervals. All results reproducible and auto-graded.',
-    url: 'https://arcrouter.ai/research',
+    url: 'https://arcrouter.com/research',
   },
   alternates: {
-    canonical: 'https://arcrouter.ai/research',
+    canonical: 'https://arcrouter.com/research',
   },
 }
 

@@ -24,13 +24,13 @@ const spaceGrotesk = Space_Grotesk({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://arcrouter.ai'),
+  metadataBase: new URL('https://arcrouter.com'),
   title: {
     default: 'ArcRouter — Smart LLM Router | Best Model for Every Prompt',
     template: '%s | ArcRouter',
   },
-  description: 'Route any prompt to the best AI model automatically. Up to 90% cheaper than GPT-4o with benchmark-verified quality. 345+ models, 24 topic categories, semantic routing.',
-  keywords: ['LLM router', 'AI model router', 'smart routing', 'benchmark scores', 'cost optimization', 'OpenAI alternative', 'GPT-4o cheaper', 'multi-model', 'AI API', 'language model'],
+  description: 'Route any prompt to the best AI model automatically. Up to 90% cheaper than premium models with benchmark-verified quality. 345+ models, 24 topic categories, semantic routing.',
+  keywords: ['LLM router', 'AI model router', 'smart routing', 'benchmark scores', 'cost optimization', 'AI API', 'multi-model', 'model routing', 'AI cost savings', 'language model'],
   authors: [{ name: 'ArcRouter' }],
   creator: 'ArcRouter',
   publisher: 'ArcRouter',
@@ -46,9 +46,9 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: 'ArcRouter — Best Model for Every Prompt, 90% Cheaper',
+    title: 'ArcRouter — Best Model for Every Prompt, Up to 90% Cheaper',
     description: 'Auto-route any prompt to the best AI model based on real benchmark scores. 345+ models, 24 topic categories, daily updates. OpenAI SDK compatible.',
-    url: 'https://arcrouter.ai',
+    url: 'https://arcrouter.com',
     siteName: 'ArcRouter',
     images: [
       {
@@ -63,12 +63,12 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ArcRouter — Smart LLM Router | 90% Cheaper Than GPT-4o',
+    title: 'ArcRouter — Smart LLM Router | Up to 90% Cost Savings',
     description: 'Auto-route any prompt to the best AI model. Benchmark-verified quality at a fraction of the cost. OpenAI SDK compatible.',
     images: ['/og-image.png'],
   },
   alternates: {
-    canonical: 'https://arcrouter.ai',
+    canonical: 'https://arcrouter.com',
   },
 }
 
@@ -90,8 +90,8 @@ export default function RootLayout({
               name: 'ArcRouter',
               applicationCategory: 'DeveloperApplication',
               operatingSystem: 'Web',
-              description: 'Smart LLM router that auto-routes prompts to the best AI model based on benchmark scores. Up to 90% cheaper than GPT-4o.',
-              url: 'https://arcrouter.ai',
+              description: 'Smart LLM router that auto-routes prompts to the best AI model based on benchmark scores. Up to 90% cheaper than premium models.',
+              url: 'https://arcrouter.com',
               offers: [
                 {
                   '@type': 'Offer',
@@ -112,7 +112,7 @@ export default function RootLayout({
                 'Smart routing across 345+ AI models',
                 '24 granular topic categories',
                 'Semantic routing with embedding-based reranking',
-                'Up to 90% cost savings vs GPT-4o',
+                'Up to 90% cost savings vs premium models',
                 'OpenAI SDK compatible',
                 'Full SSE streaming support',
                 'Daily benchmark updates from HuggingFace, LiveBench, LiveCodeBench',

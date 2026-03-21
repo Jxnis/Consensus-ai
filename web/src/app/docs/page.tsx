@@ -23,7 +23,7 @@ export default function DocsPage() {
   const [activeSection, setActiveSection] = useState("introduction");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const apiUrl = "https://consensus-api.janis-ellerbrock.workers.dev/v1";
+  const apiUrl = "https://api.arcrouter.com/v1";
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(apiUrl);
@@ -216,7 +216,7 @@ console.log(council.consensus); // { confidence, votes, ... }`}
                             <span className="text-violet-500 text-xs font-bold">03</span>
                         </div>
                         <h3 className="font-heading text-lg mb-2">x402 (USDC)</h3>
-                        <p className="text-sm text-muted-foreground mb-4">Pay per request with USDC on Base. Variable pricing by complexity.</p>
+                        <p className="text-sm text-muted-foreground mb-4">Pay per request with USDC on Base. Variable pricing by complexity. Ideal for agent-to-agent payments — no account needed.</p>
                         <code className="text-xs bg-muted px-2 py-1 rounded">X-PAYMENT header (auto)</code>
                     </div>
                 </div>
@@ -715,7 +715,7 @@ opencode
                         </div>
                     </div>
                     <p className="text-sm text-muted-foreground mt-4">
-                        API Key users pay a flat $0.002/request via Stripe metered billing, invoiced monthly. x402 users pay per-request with USDC on Base Mainnet via the Coinbase CDP facilitator.
+                        API Key users pay a flat $0.002/request via Stripe metered billing, invoiced monthly. x402 users pay per-request with USDC on Base Mainnet via the Coinbase CDP facilitator — ideal for autonomous agents and agent-to-agent payments.
                     </p>
                 </div>
 

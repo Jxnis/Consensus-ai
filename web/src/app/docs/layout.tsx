@@ -6,10 +6,10 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'ArcRouter Documentation — API Reference & SDKs',
     description: 'Complete API docs: OpenAI-compatible endpoints, smart routing, council mode, streaming, authentication. Drop-in replacement for OpenAI SDK.',
-    url: 'https://arcrouter.ai/docs',
+    url: 'https://arcrouter.com/docs',
   },
   alternates: {
-    canonical: 'https://arcrouter.ai/docs',
+    canonical: 'https://arcrouter.com/docs',
   },
 }
 

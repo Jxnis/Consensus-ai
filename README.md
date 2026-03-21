@@ -1,11 +1,11 @@
 # ArcRouter
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![API Status](https://img.shields.io/badge/API-Live-brightgreen)](https://consensus-api.janis-ellerbrock.workers.dev/health)
+[![API Status](https://img.shields.io/badge/API-Live-brightgreen)](https://api.arcrouter.com/health)
 [![Cloudflare Workers](https://img.shields.io/badge/Runtime-Cloudflare_Workers-orange)](https://workers.cloudflare.com/)
 [![Next.js 16](https://img.shields.io/badge/Frontend-Next.js_16-black)](https://nextjs.org/)
 
-**The benchmark-verified LLM router.** Route any prompt to the best AI model — up to 90% cheaper than GPT-4o — based on real benchmark data from HuggingFace, LiveBench, and LiveCodeBench.
+**The benchmark-verified LLM router.** Route any prompt to the best AI model — up to 90% cheaper than premium models — based on real benchmark data from HuggingFace, LiveBench, and LiveCodeBench.
 
 Instead of guessing which model to use, ArcRouter automatically picks the right one:
 - **Topic detection** across 24 granular categories (code/frontend, math/calculus, science/physics, etc.)
@@ -26,7 +26,7 @@ Instead of guessing which model to use, ArcRouter automatically picks the right 
 | **Benchmark data** | No | HuggingFace + LiveBench + LiveCodeBench |
 | **Failover** | No | 3-model circuit breaker chain |
 | **Streaming** | Yes | Yes — full SSE, OpenAI SDK compatible |
-| **Micropayments** | No | x402 pay-per-query (USDC on Base) |
+| **Micropayments** | No | x402 pay-per-query (USDC on Base) — agent-to-agent ready |
 | **Council mode** | No | Multi-model consensus verification |
 
 ---
@@ -36,13 +36,13 @@ Instead of guessing which model to use, ArcRouter automatically picks the right 
 ### Drop-in OpenAI Replacement
 
 ```bash
-https://consensus-api.janis-ellerbrock.workers.dev/v1
+https://api.arcrouter.com/v1
 ```
 
 ### cURL
 
 ```bash
-curl https://consensus-api.janis-ellerbrock.workers.dev/v1/chat/completions \
+curl https://api.arcrouter.com/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "arc-router-v1",
@@ -58,7 +58,7 @@ curl https://consensus-api.janis-ellerbrock.workers.dev/v1/chat/completions \
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://consensus-api.janis-ellerbrock.workers.dev/v1",
+    base_url="https://api.arcrouter.com/v1",
     api_key="sk_your_key"  # Optional for free tier
 )
 
@@ -83,7 +83,7 @@ council = client.chat.completions.create(
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  baseURL: "https://consensus-api.janis-ellerbrock.workers.dev/v1",
+  baseURL: "https://api.arcrouter.com/v1",
   apiKey: process.env.ARC_API_KEY || "",
 });
 
@@ -135,11 +135,11 @@ Response + Routing Metadata
 
 | Provider | Model | Cost | Quality |
 |----------|-------|------|---------|
-| OpenAI | GPT-4o | $0.0075 | Excellent |
+| OpenAI | GPT-5 | $0.0075 | Excellent |
 | Anthropic | Sonnet 4.5 | $0.0090 | Excellent |
 | **ArcRouter** | **DeepSeek V3.2** (auto) | **$0.0008** | Very Good |
 
-**89% cheaper** than GPT-4o. Same topic, benchmark-verified quality.
+**89% cheaper** than premium models. Same topic, benchmark-verified quality.
 
 ---
 
@@ -238,7 +238,7 @@ Service health check.
 - **Routing telemetry** — Per-model latency, success rate, D1 history log
 - **Streaming** — Full SSE with routing metadata in headers
 - **Stripe billing** — Metered subscriptions with auto-downgrade on payment failure
-- **x402 micropayments** — USDC on Base via Coinbase CDP facilitator
+- **x402 micropayments** — USDC on Base via Coinbase CDP facilitator, supports agent-to-agent payments
 - **Daily cron** — Automated scraper pipeline + score recalculation
 
 ---
@@ -290,5 +290,5 @@ MIT © 2026 ArcRouter
 
 ---
 
-**Live API:** [consensus-api.janis-ellerbrock.workers.dev](https://consensus-api.janis-ellerbrock.workers.dev)
+**Live API:** [consensus-api.janis-ellerbrock.workers.dev](https://api.arcrouter.com)
 **Questions?** [janis.ellerbrock@gmail.com](mailto:janis.ellerbrock@gmail.com)

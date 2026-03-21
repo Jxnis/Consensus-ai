@@ -30,7 +30,7 @@ const plans = [
       "Council mode available",
       "1,000 req / hour",
       "Stripe metered billing",
-      "x402 micropayments (USDC)",
+      "x402 micropayments (agent-to-agent)",
     ],
     cta: "Start Building",
     useCheckout: true,

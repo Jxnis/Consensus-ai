@@ -27,7 +27,7 @@ const HeroNew = () => {
         >
           <p className="font-mono text-[11px] leading-relaxed text-muted-foreground max-w-md tracking-wide">
             Auto-route any prompt to the best AI model based on real benchmark scores.
-            Same quality as GPT-4o at up to 90% lower cost. 345+ models, 24 topic categories, daily updates.
+            Same quality as premium models at up to 90% lower cost. 345+ models, 24 topic categories, daily updates.
           </p>
 
           <div className="flex items-center gap-4">

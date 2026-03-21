@@ -104,7 +104,7 @@ export async function scrapeBigCodeBench(db: D1Database): Promise<ScraperResult>
     const response = await fetchWithRetry(apiUrl, {
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'ArcRouter/1.0 (https://arcrouter.ai)',
+        'User-Agent': 'ArcRouter/1.0 (https://arcrouter.com)',
       },
     });
 
