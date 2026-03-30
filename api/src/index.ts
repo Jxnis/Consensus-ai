@@ -1023,6 +1023,90 @@ app.get("/health", async (c) => {
   return c.json({ ...checks, healthy }, healthy ? 200 : 503);
 });
 
+// Waitlist signup — beta launch email capture
+app.post("/api/waitlist", async (c) => {
+  if (!c.env.SCORE_DB) {
+    return c.json({ error: "Database not available" }, 503);
+  }
+
+  // Rate limit: 3 submissions per IP per hour
+  const ip = c.req.header("cf-connecting-ip") || c.req.header("x-real-ip") || "unknown";
+  const ipHash = await hashApiKey(ip); // Reuse hash function
+  const rateLimitKey = `waitlist:ratelimit:${ipHash}`;
+  const currentCount = parseInt((await c.env.CONSENSUS_CACHE.get(rateLimitKey)) || "0");
+
+  if (currentCount >= 3) {
+    return c.json({ error: "Too many submissions. Please try again later." }, 429);
+  }
+
+  // Validate email
+  const body = await c.req.json().catch(() => ({}));
+  const emailSchema = z.object({
+    email: z.string().email("Invalid email address").max(255),
+  });
+
+  const parsed = emailSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({
+      error: "Invalid email address",
+      details: parsed.error.flatten().fieldErrors
+    }, 400);
+  }
+
+  const { email } = parsed.data;
+  const referrer = c.req.header("referer") || null;
+  const userAgent = c.req.header("user-agent") || null;
+
+  try {
+    // Insert into waitlist (UNIQUE constraint handles duplicates)
+    await c.env.SCORE_DB.prepare(
+      `INSERT INTO waitlist (email, referrer, user_agent, ip_hash)
+       VALUES (?1, ?2, ?3, ?4)`
+    ).bind(email, referrer, userAgent, ipHash).run();
+
+    // Increment rate limit counter (1 hour TTL)
+    await c.env.CONSENSUS_CACHE.put(rateLimitKey, (currentCount + 1).toString(), { expirationTtl: 3600 });
+
+    // Get current waitlist count
+    const countResult = await c.env.SCORE_DB.prepare(
+      `SELECT COUNT(*) as count FROM waitlist`
+    ).first<{ count: number }>();
+
+    return c.json({
+      success: true,
+      message: "You're on the waitlist!",
+      position: countResult?.count || 1
+    }, 201);
+
+  } catch (err: any) {
+    // Handle duplicate email
+    if (err.message?.includes("UNIQUE constraint failed")) {
+      return c.json({ error: "This email is already on the waitlist." }, 409);
+    }
+
+    console.error("[Waitlist] Database error:", err);
+    return c.json({ error: "Failed to save email. Please try again." }, 500);
+  }
+});
+
+// Public: Get waitlist count (no auth, no rate limit)
+app.get("/api/waitlist/count", async (c) => {
+  if (!c.env.SCORE_DB) {
+    return c.json({ count: 0 });
+  }
+
+  try {
+    const result = await c.env.SCORE_DB.prepare(
+      `SELECT COUNT(*) as count FROM waitlist`
+    ).first<{ count: number }>();
+
+    return c.json({ count: result?.count || 0 });
+  } catch (err) {
+    console.error("[Waitlist] Failed to get count:", err);
+    return c.json({ count: 0 });
+  }
+});
+
 // Root info endpoint
 app.get("/", (c) => {
   return c.json({

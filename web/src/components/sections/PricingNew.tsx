@@ -2,6 +2,7 @@
 
 import { motion, useInView } from "motion/react";
 import { useRef, useState } from "react";
+import WaitlistModal from "../WaitlistModal";
 
 const plans = [
   {
@@ -19,6 +20,7 @@ const plans = [
     cta: "Get Started",
     href: "/docs",
     highlighted: false,
+    tier: "free" as const,
   },
   {
     name: "Developer",
@@ -32,9 +34,10 @@ const plans = [
       "Stripe metered billing",
       "x402 micropayments (agent-to-agent)",
     ],
-    cta: "Start Building",
-    useCheckout: true,
+    cta: "Join Waitlist",
+    useWaitlist: true,
     highlighted: true,
+    tier: "developer" as const,
   },
   {
     name: "Team",
@@ -51,36 +54,19 @@ const plans = [
     cta: "Contact Us",
     href: "mailto:janis.ellerbrock@gmail.com",
     highlighted: false,
+    tier: "team" as const,
   },
 ];
 
 const PricingNew = () => {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [selectedTier, setSelectedTier] = useState<"free" | "developer" | "team">("developer");
 
-  const handleCheckout = async () => {
-    setCheckoutLoading(true);
-    try {
-      const response = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.url) {
-        // Redirect to Stripe checkout
-        window.location.href = data.url;
-      } else {
-        alert('Failed to start checkout: ' + (data.error || 'Unknown error'));
-        setCheckoutLoading(false);
-      }
-    } catch (error) {
-      console.error('Checkout error:', error);
-      alert('Network error. Please try again.');
-      setCheckoutLoading(false);
-    }
+  const handleOpenWaitlist = (tier: "free" | "developer" | "team") => {
+    setSelectedTier(tier);
+    setWaitlistOpen(true);
   };
 
   return (
@@ -134,17 +120,16 @@ const PricingNew = () => {
                 ))}
               </ul>
 
-              {(plan as any).useCheckout ? (
+              {(plan as any).useWaitlist ? (
                 <button
-                  onClick={handleCheckout}
-                  disabled={checkoutLoading}
-                  className={`w-full font-mono text-[11px] tracking-[0.15em] uppercase py-4 transition-all duration-500 hover:tracking-[0.3em] text-center disabled:opacity-50 disabled:cursor-not-allowed ${
+                  onClick={() => handleOpenWaitlist(plan.tier)}
+                  className={`w-full font-mono text-[11px] tracking-[0.15em] uppercase py-4 transition-all duration-500 hover:tracking-[0.3em] text-center cursor-pointer ${
                     plan.highlighted
                       ? "bg-foreground text-background"
                       : "border border-border text-foreground hover:bg-foreground hover:text-background"
                   }`}
                 >
-                  {checkoutLoading ? 'Loading...' : plan.cta}
+                  {plan.cta}
                 </button>
               ) : (
                 <a
@@ -161,6 +146,13 @@ const PricingNew = () => {
             </motion.div>
           ))}
         </div>
+
+        {/* Waitlist Modal */}
+        <WaitlistModal
+          isOpen={waitlistOpen}
+          onClose={() => setWaitlistOpen(false)}
+          tier={selectedTier}
+        />
       </div>
     </section>
   );

@@ -1,8 +1,14 @@
+"use client";
+
+import { useState } from "react";
 import { motion } from "motion/react";
+import WaitlistModal from "../WaitlistModal";
 
 const words = ["Route", "smarter.", "Pay", "less."];
 
 const HeroNew = () => {
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
+
   return (
     <section className="min-h-screen flex flex-col justify-center px-8 pt-16">
       <div className="max-w-[1400px] mx-auto w-full">
@@ -37,15 +43,21 @@ const HeroNew = () => {
             >
               Try Playground
             </a>
-            <a
-              href="/docs"
-              className="group font-mono text-[11px] tracking-[0.15em] uppercase px-8 py-4 border border-foreground text-foreground transition-all duration-500 hover:bg-foreground hover:text-background"
+            <button
+              onClick={() => setWaitlistOpen(true)}
+              className="group font-mono text-[11px] tracking-[0.15em] uppercase px-8 py-4 border border-foreground text-foreground transition-all duration-500 hover:bg-foreground hover:text-background cursor-pointer"
             >
-              Read Docs
-            </a>
+              Join Waitlist
+            </button>
           </div>
         </motion.div>
       </div>
+
+      <WaitlistModal
+        isOpen={waitlistOpen}
+        onClose={() => setWaitlistOpen(false)}
+        tier="developer"
+      />
     </section>
   );
 };
