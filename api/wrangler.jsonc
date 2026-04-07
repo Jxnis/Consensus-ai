@@ -41,12 +41,21 @@
 	//   "head_sampling_rate": 1
 	// },
 	// Secrets (set via `wrangler secret put`):
-	// - OPENROUTER_API_KEY: Your OpenRouter API key
+	// REQUIRED:
+	// - OPENROUTER_API_KEY: Your OpenRouter API key (long-tail models + fallback)
 	// - ADMIN_TOKEN: Secret for /admin/create-key endpoint
 	// - X402_WALLET_ADDRESS: Base Mainnet wallet for x402 payments
+	//
+	// DIRECT PROVIDERS (optional — activates bypass for each provider, falls back to OpenRouter when not set):
+	// - OPENAI_API_KEY: OpenAI direct (GPT-4o, o3, o4-mini — eliminates OpenRouter markup + latency)
+	// - ANTHROPIC_API_KEY: Anthropic direct (Claude Sonnet/Opus/Haiku)
+	// - GOOGLE_API_KEY: Google direct (Gemini 2.5 Flash/Pro via v1beta OpenAI-compat endpoint)
+	// - DEEPSEEK_API_KEY: DeepSeek direct (DeepSeek V3, R1)
+	// - XAI_API_KEY: xAI direct (Grok)
+	//
+	// STRIPE (optional):
 	// - STRIPE_SECRET_KEY: Stripe secret key (sk_live_... or sk_test_...)
 	// - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret (whsec_...)
 	// - STRIPE_PRICE_ID: Stripe metered price ID (price_...)
 	// NOTE: X402_WALLET_ADDRESS must be a secret, NOT a var, to prevent zero-address fallback
-	// NOTE: Stripe secrets are optional - only required if enabling Stripe billing
 }

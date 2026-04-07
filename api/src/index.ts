@@ -12,6 +12,7 @@ import { CouncilEngine } from "./council/engine";
 import { ConsensusRequest, CloudflareBindings } from "./types";
 import { handleMCPRequest } from "./mcp/server";
 import { WorkflowTracker, parseAgentStep } from "./router/workflow";
+import { callDirectProvider, getProviderName, isDirectProviderAvailable } from "./providers/index";
 import OpenAI from "openai";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
@@ -21,8 +22,17 @@ app.use("/v1/*", cors());
 
 // Startup env validation — fail fast on bad deployment
 app.use("*", async (c, next) => {
-  if (!c.env.OPENROUTER_API_KEY) {
-    console.error("[ArcRouter] FATAL: OPENROUTER_API_KEY is not set. Requests will fail.");
+  const hasDirectProvider = !!(
+    (c.env as any).OPENAI_API_KEY ||
+    (c.env as any).ANTHROPIC_API_KEY ||
+    (c.env as any).GOOGLE_API_KEY ||
+    (c.env as any).DEEPSEEK_API_KEY ||
+    (c.env as any).XAI_API_KEY
+  );
+  if (!c.env.OPENROUTER_API_KEY && !hasDirectProvider) {
+    console.error("[ArcRouter] FATAL: No provider keys set (OPENROUTER_API_KEY or direct provider keys). Requests will fail.");
+  } else if (!c.env.OPENROUTER_API_KEY) {
+    console.warn("[ArcRouter] WARNING: OPENROUTER_API_KEY is not set. Only direct provider models available.");
   }
   if (!c.env.ADMIN_TOKEN) {
     console.error("[ArcRouter] WARNING: ADMIN_TOKEN is not set. Admin endpoint is disabled.");
@@ -401,8 +411,17 @@ app.post("/v1/chat/completions", async (c) => {
     return c.json({ error: "Prompt cannot be empty", request_id: requestId }, 400);
   }
 
-  if (!c.env.OPENROUTER_API_KEY) {
-    return c.json({ error: "Service temporarily unavailable", request_id: requestId }, 503);
+  // Require at least one provider key (OpenRouter or any direct provider)
+  const hasAnyProviderKey = !!(
+    c.env.OPENROUTER_API_KEY ||
+    (c.env as any).OPENAI_API_KEY ||
+    (c.env as any).ANTHROPIC_API_KEY ||
+    (c.env as any).GOOGLE_API_KEY ||
+    (c.env as any).DEEPSEEK_API_KEY ||
+    (c.env as any).XAI_API_KEY
+  );
+  if (!hasAnyProviderKey) {
+    return c.json({ error: "Service temporarily unavailable — no provider keys configured", request_id: requestId }, 503);
   }
 
   const authTier = (c.get("authTier" as never) as string) || "free";
@@ -410,13 +429,10 @@ app.post("/v1/chat/completions", async (c) => {
   const routingBudget = normalizeRoutingBudget(rawBudget, authTier);
   const councilBudget = routingBudgetToCouncilBudget(routingBudget);
 
-  // Use pre-scored complexity from middleware if available (avoids redundant scoring)
-  const preScored = c.get("complexityTier" as never) as "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING" | undefined;
+  // Always use full scorePrompt for accurate confidence — the middleware pre-scores for
+  // x402 pricing but the handler needs real confidence for routing metadata.
   const preHasTools = (c.get("hasToolsArray" as never) as boolean | undefined) ?? Array.isArray(body.tools);
-  const complexityResult = preScored
-    ? { tier: preScored, confidence: 0.8, isAgentic: preHasTools, score: 0, reason: "" }
-    : scorePrompt(sanitizedPrompt, preHasTools);
-  const complexity = complexityResult;
+  const complexity = scorePrompt(sanitizedPrompt, preHasTools);
   const engine = new CouncilEngine(c.env);
 
   // Extract quick-win parameters from request body
@@ -428,7 +444,10 @@ app.post("/v1/chat/completions", async (c) => {
   const forcedModelId = typeof body.model === "string" && !body.model.startsWith("__alias:")
     ? body.model
     : undefined;
-  const wantsFreeAlias = typeof body.model === "string" && body.model === "__alias:free";
+  // "free" model alias → force free budget tier regardless of auth
+  if (typeof body.model === "string" && body.model === "__alias:free") {
+    (body as any).budget = "free";
+  }
 
   // === SPRINT 2: X-Agent-Step header ===
   const agentStep = parseAgentStep(c.req.header("X-Agent-Step"));
@@ -515,7 +534,7 @@ app.post("/v1/chat/completions", async (c) => {
     let sessionPinnedModelId: string | null = null;
     if (sessionId && c.env.CONSENSUS_CACHE) {
       try {
-        sessionPinnedModelId = await c.env.CONSENSUS_CACHE.get(`session:${sessionId}`);
+        sessionPinnedModelId = await c.env.CONSENSUS_CACHE.get(`chat_session:${sessionId}`);
         if (sessionPinnedModelId) {
           console.log(`[Smart Router] Session pin HIT for ${sessionId}: ${sessionPinnedModelId}`);
         }
@@ -776,15 +795,17 @@ app.post("/v1/chat/completions", async (c) => {
       }
     }
 
-    // Initialize OpenAI client
-    const openai = new OpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: c.env.OPENROUTER_API_KEY,
-      defaultHeaders: {
-        'HTTP-Referer': 'https://arcrouter.ai',
-        'X-Title': 'ArcRouter',
-      },
-    });
+    // Initialize OpenAI client for OpenRouter fallback (only if key available)
+    const openai = c.env.OPENROUTER_API_KEY
+      ? new OpenAI({
+          baseURL: 'https://openrouter.ai/api/v1',
+          apiKey: c.env.OPENROUTER_API_KEY,
+          defaultHeaders: {
+            'HTTP-Referer': 'https://arcrouter.ai',
+            'X-Title': 'ArcRouter',
+          },
+        })
+      : null;
 
     // Failover chain: try up to 3 models
     const MAX_FAILOVER_ATTEMPTS = Math.min(healthyModels.length, 3);
@@ -802,6 +823,64 @@ app.post("/v1/chat/completions", async (c) => {
           // TASK-P4.10: Streaming support with failover
           // NOTE: For streaming, we can only failover BEFORE the first chunk arrives
           // Once chunks start flowing, we cannot switch models
+          // Direct provider streaming: use OpenAI-compatible providers directly when possible
+          // (Anthropic streaming format differs, so Anthropic always goes via OpenRouter for streams)
+          const directStreamResult = await callDirectProvider(
+            model.id,
+            {
+              model: model.id,
+              messages: body.messages as any,
+              temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
+              max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+              stream: true,
+            },
+            c.env
+          );
+
+          let streamSource: AsyncIterable<any>;
+          let streamCallPath = 'openrouter';
+
+          if (directStreamResult) {
+            // Direct provider returned a streaming response — pipe it through
+            const reader = directStreamResult.response.body?.getReader();
+            streamCallPath = `direct:${getProviderName(model.id)}`;
+            console.log(`[DirectProvider] Streaming via ${directStreamResult.provider} for ${model.id}`);
+
+            const encoder2 = new TextEncoder();
+            const readable2 = new ReadableStream({
+              async start(controller) {
+                if (!reader) { controller.close(); return; }
+                try {
+                  while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    controller.enqueue(value);
+                  }
+                  controller.close();
+                  c.executionCtx.waitUntil(Promise.all([
+                    circuitBreaker.recordSuccess(model.id),
+                    telemetry.record(model.id, Date.now() - startTime, true),
+                  ]));
+                } catch (e) {
+                  c.executionCtx.waitUntil(circuitBreaker.recordFailure(model.id));
+                  controller.error(e);
+                }
+              },
+            });
+            return new Response(readable2, {
+              headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'X-ArcRouter-Mode': 'default',
+                'X-ArcRouter-Model': model.id,
+                'X-ArcRouter-Call-Path': streamCallPath,
+              },
+            });
+          }
+
+          if (!openai) {
+            throw new Error(`No provider available for ${model.id} (no OpenRouter key and direct provider returned null)`);
+          }
           const stream = await openai.chat.completions.create({
             model: model.id,
             messages: body.messages as any,
@@ -896,12 +975,36 @@ app.post("/v1/chat/completions", async (c) => {
           });
         } else {
           // Non-streaming response with failover
-          const completion = await openai.chat.completions.create({
-            model: model.id,
-            messages: body.messages as any,
-            temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
-            max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
-          });
+          // Try direct provider first; fall back to OpenRouter when key not set or direct call fails
+          let completion: Record<string, unknown>;
+          let usedDirectProvider = false;
+
+          const directResult = await callDirectProvider(
+            model.id,
+            {
+              model: model.id,
+              messages: body.messages as any,
+              temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
+              max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+            },
+            c.env
+          );
+
+          if (directResult) {
+            completion = await directResult.response.json() as Record<string, unknown>;
+            usedDirectProvider = true;
+            console.log(`[DirectProvider] Used ${directResult.provider} for ${model.id}`);
+          } else if (openai) {
+            // Fall back to OpenRouter
+            completion = await openai.chat.completions.create({
+              model: model.id,
+              messages: body.messages as any,
+              temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
+              max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+            }) as any;
+          } else {
+            throw new Error(`No provider available for ${model.id} (no OpenRouter key and direct provider returned null)`);
+          }
 
           const latency = Date.now() - startTime;
 
@@ -911,7 +1014,7 @@ app.post("/v1/chat/completions", async (c) => {
           // Session pinning: save successful model for future requests with same session_id
           if (sessionId && c.env.CONSENSUS_CACHE) {
             c.executionCtx.waitUntil(
-              c.env.CONSENSUS_CACHE.put(`session:${sessionId}`, model.id, { expirationTtl: 3600 })
+              c.env.CONSENSUS_CACHE.put(`chat_session:${sessionId}`, model.id, { expirationTtl: 3600 })
             );
           }
 
@@ -985,10 +1088,11 @@ app.post("/v1/chat/completions", async (c) => {
               selected_model: model.id,
               model_name: model.name,
               provider: model.provider,
+              call_path: usedDirectProvider ? `direct:${getProviderName(model.id)}` : 'openrouter',
               topic_detected: topic,
               topic_confidence: Math.round(topicDetection.confidence * 100) / 100,
               complexity_tier: complexity.tier,
-              complexity_confidence: Math.round((complexity.confidence ?? 0.8) * 100) / 100,
+              complexity_confidence: Math.round(complexity.confidence * 100) / 100,
               budget: effectiveRoutingBudget,
               data_source: dataSource,
               failover_count: failoverCount,
@@ -1242,14 +1346,24 @@ app.post("/v1/chat/completions", async (c) => {
 
 // Health check — verifies config is present
 app.get("/health", async (c) => {
+  const directProviders = [
+    (c.env as any).OPENAI_API_KEY && "openai",
+    (c.env as any).ANTHROPIC_API_KEY && "anthropic",
+    (c.env as any).GOOGLE_API_KEY && "google",
+    (c.env as any).DEEPSEEK_API_KEY && "deepseek",
+    (c.env as any).XAI_API_KEY && "xai",
+  ].filter(Boolean) as string[];
+
   const checks: Record<string, string> = {
     status: "ok",
-    openrouter_key: c.env.OPENROUTER_API_KEY ? "configured" : "MISSING",
+    openrouter_key: c.env.OPENROUTER_API_KEY ? "configured" : "not set",
+    direct_providers: directProviders.length > 0 ? directProviders.join(", ") : "none",
     admin_token: c.env.ADMIN_TOKEN ? "configured" : "MISSING",
     x402_wallet: c.env.X402_WALLET_ADDRESS ? "configured" : "MISSING",
   };
 
-  const healthy = checks.openrouter_key === "configured";
+  // Healthy if at least one provider is available
+  const healthy = !!(c.env.OPENROUTER_API_KEY || directProviders.length > 0);
   return c.json({ ...checks, healthy }, healthy ? 200 : 503);
 });
 
@@ -2039,7 +2153,7 @@ app.get("/v1/stripe/api-key", async (c) => {
     // Path 1: Retrieve by session_id (secure, time-limited)
     if (sessionId) {
       // Check if session mapping exists (stored by webhook with 24h TTL)
-      const sessionData = await c.env.CONSENSUS_CACHE.get(`session:${sessionId}`);
+      const sessionData = await c.env.CONSENSUS_CACHE.get(`stripe_session:${sessionId}`);
 
       if (!sessionData) {
         return c.json({
@@ -2051,7 +2165,7 @@ app.get("/v1/stripe/api-key", async (c) => {
 
       // Enforce one-time retrieval: delete session mapping after first successful fetch.
       try {
-        await c.env.CONSENSUS_CACHE.delete(`session:${sessionId}`);
+        await c.env.CONSENSUS_CACHE.delete(`stripe_session:${sessionId}`);
       } catch (err) {
         console.error("[Stripe] Failed to delete session mapping (non-fatal):", err);
       }

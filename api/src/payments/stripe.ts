@@ -241,7 +241,7 @@ async function handleCheckoutCompleted(
 
     // Store session mapping for 24-hour retrieval (allows user to get API key from dashboard)
     await c.env.CONSENSUS_CACHE.put(
-      `session:${session.id}`,
+      `stripe_session:${session.id}`,
       JSON.stringify({
         apiKey,  // Store the PLAIN API key here (only accessible via session_id for 24h)
         email: customerEmail,

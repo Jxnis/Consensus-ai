@@ -69,6 +69,12 @@ export interface CloudflareBindings {
   AI: any; // Workers AI binding
   ENVIRONMENT?: string;
   SEMANTIC_ROUTING_ENABLED?: string; // Feature flag: 'true' | 'false'
+  // Direct provider API keys (optional — falls back to OpenRouter when not set)
+  OPENAI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  GOOGLE_API_KEY?: string;
+  DEEPSEEK_API_KEY?: string;
+  XAI_API_KEY?: string;
   // Stripe integration (optional)
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;

@@ -129,6 +129,7 @@ async function callTool(
     case "arcrouter_chat": {
       const prompt = String(toolArgs.prompt || "").trim();
       const budget = String(toolArgs.budget || "auto");
+      const mode = String(toolArgs.mode || "default");
       const sessionId = toolArgs.session_id ? String(toolArgs.session_id) : undefined;
 
       if (!prompt) {
@@ -138,13 +139,22 @@ async function callTool(
         };
       }
 
-      if (!env.OPENROUTER_API_KEY) {
+      // Need at least one provider available
+      const hasAnyProvider = !!(
+        env.OPENROUTER_API_KEY ||
+        (env as any).OPENAI_API_KEY ||
+        (env as any).ANTHROPIC_API_KEY ||
+        (env as any).GOOGLE_API_KEY ||
+        (env as any).DEEPSEEK_API_KEY ||
+        (env as any).XAI_API_KEY
+      );
+      if (!hasAnyProvider) {
         return {
           isError: true,
           content: [
             {
               type: "text",
-              text: "ArcRouter service unavailable: OpenRouter API key not configured",
+              text: "ArcRouter service unavailable: no provider API keys configured",
             },
           ],
         };
@@ -188,44 +198,112 @@ async function callTool(
         }
       }
 
-      // Call OpenRouter
-      const startTime = Date.now();
-      let answer = "";
-      let callSuccess = false;
-
-      try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-            "HTTP-Referer": "https://arcrouter.ai",
-            "X-Title": "ArcRouter MCP",
-          },
-          body: JSON.stringify({
-            model: modelId,
-            messages: [{ role: "user", content: prompt }],
-          }),
-        });
-
-        if (!response.ok) {
-          const status = response.status;
+      // Council mode: delegate to full engine if requested
+      if (mode === "council") {
+        try {
+          const { CouncilEngine } = await import("../council/engine");
+          const { routingBudgetToCouncilBudget } = await import("../router/budget");
+          const engine = new CouncilEngine(env);
+          const councilBudget = routingBudgetToCouncilBudget(routingBudget);
+          const result = await engine.runConsensus(
+            { prompt, budget: councilBudget, reliability: "standard", mode: "council" },
+            complexity.tier
+          );
+          return {
+            content: [{ type: "text", text: result.answer }],
+            metadata: {
+              mode: "council",
+              confidence: result.confidence,
+              votes: result.votes,
+              synthesized: result.synthesized ?? false,
+              complexity_tier: complexity.tier,
+              budget_used: routingBudget,
+            },
+          };
+        } catch (councilErr) {
           return {
             isError: true,
             content: [
               {
                 type: "text",
-                text: `Model call failed (${status}). Try a different budget tier or report at https://github.com/arcrouter/arcrouter/issues`,
+                text: `Council mode failed: ${councilErr instanceof Error ? councilErr.message : String(councilErr)}`,
               },
             ],
           };
         }
+      }
 
-        const completion = (await response.json()) as {
-          choices?: Array<{ message?: { content?: string } }>;
-        };
-        answer = completion.choices?.[0]?.message?.content || "";
-        callSuccess = true;
+      // Default mode: call single best model (try direct provider first, then OpenRouter)
+      const startTime = Date.now();
+      let answer = "";
+      let callSuccess = false;
+      let callPath = "openrouter";
+
+      try {
+        const { callDirectProvider, getProviderName } = await import("../providers/index");
+
+        // Try direct provider first
+        const directResult = await callDirectProvider(
+          modelId,
+          {
+            model: modelId,
+            messages: [{ role: "user", content: prompt }],
+          },
+          env
+        );
+
+        if (directResult) {
+          const completion = (await directResult.response.json()) as {
+            choices?: Array<{ message?: { content?: string } }>;
+          };
+          answer = completion.choices?.[0]?.message?.content || "";
+          callSuccess = true;
+          callPath = `direct:${getProviderName(modelId)}`;
+        } else if (env.OPENROUTER_API_KEY) {
+          // Fall back to OpenRouter
+          const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+              "HTTP-Referer": "https://arcrouter.ai",
+              "X-Title": "ArcRouter MCP",
+            },
+            body: JSON.stringify({
+              model: modelId,
+              messages: [{ role: "user", content: prompt }],
+            }),
+          });
+
+          if (!response.ok) {
+            const status = response.status;
+            return {
+              isError: true,
+              content: [
+                {
+                  type: "text",
+                  text: `Model call failed (${status}). Try a different budget tier or report at https://github.com/arcrouter/arcrouter/issues`,
+                },
+              ],
+            };
+          }
+
+          const completion = (await response.json()) as {
+            choices?: Array<{ message?: { content?: string } }>;
+          };
+          answer = completion.choices?.[0]?.message?.content || "";
+          callSuccess = true;
+        } else {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: "No provider available for this model. Configure OPENROUTER_API_KEY or the relevant direct provider key.",
+              },
+            ],
+          };
+        }
       } catch (fetchErr) {
         return {
           isError: true,
@@ -250,11 +328,14 @@ async function callTool(
       return {
         content: [{ type: "text", text: answer }],
         metadata: {
+          mode: "default",
           model_used: modelId,
           model_name: modelName,
+          call_path: callPath,
           topic_detected: topic,
           topic_confidence: Math.round(topicDetection.confidence * 100) / 100,
           complexity_tier: complexity.tier,
+          complexity_confidence: Math.round(complexity.confidence * 100) / 100,
           budget_used: routingBudget,
           latency_ms: latency,
           session_pinned: !!pinnedModelId,
@@ -330,8 +411,20 @@ async function callTool(
     }
 
     case "arcrouter_health": {
+      const directProviders = {
+        openai: !!(env as any).OPENAI_API_KEY,
+        anthropic: !!(env as any).ANTHROPIC_API_KEY,
+        google: !!(env as any).GOOGLE_API_KEY,
+        deepseek: !!(env as any).DEEPSEEK_API_KEY,
+        xai: !!(env as any).XAI_API_KEY,
+      };
+      const activeDirectProviders = Object.entries(directProviders)
+        .filter(([_, v]) => v)
+        .map(([k]) => k);
+
       const checks = {
-        openrouter_key: env.OPENROUTER_API_KEY ? "configured" : "MISSING",
+        openrouter_key: env.OPENROUTER_API_KEY ? "configured" : "not set",
+        direct_providers: activeDirectProviders.length > 0 ? activeDirectProviders.join(", ") : "none",
         admin_token: env.ADMIN_TOKEN ? "configured" : "MISSING",
         x402_wallet: env.X402_WALLET_ADDRESS ? "configured" : "MISSING",
         score_db: env.SCORE_DB ? "configured" : "MISSING",
@@ -339,9 +432,10 @@ async function callTool(
         semantic_routing: env.SEMANTIC_ROUTING_ENABLED === "true" ? "enabled" : "disabled",
       };
 
-      const healthy = checks.openrouter_key === "configured";
+      // Healthy if at least one provider is available
+      const healthy = !!(env.OPENROUTER_API_KEY || activeDirectProviders.length > 0);
       const lines = Object.entries(checks).map(
-        ([k, v]) => `  ${v === "MISSING" ? "✗" : "✓"} ${k}: ${v}`
+        ([k, v]) => `  ${v === "MISSING" || v === "not set" || v === "none" ? "✗" : "✓"} ${k}: ${v}`
       );
 
       return {
@@ -446,6 +540,46 @@ export async function handleMCPRequest(
       JSON.stringify({ error: "Only POST is supported for MCP" }),
       { status: 405, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
     );
+  }
+
+  // --- Auth: API key or free tier (rate-limited) ---
+  const authHeader = request.headers.get("Authorization");
+  const apiKey = authHeader?.replace("Bearer ", "");
+  let mcpAuthTier: "paid" | "free" = "free";
+
+  if (apiKey && env.CONSENSUS_CACHE) {
+    // Hash and look up API key
+    const bytes = new TextEncoder().encode(apiKey);
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const keyHash = Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const keyData = await env.CONSENSUS_CACHE.get(`apikey:${keyHash}`, { type: "json" }) as {
+      userId: string;
+      tier: "paid" | "playground";
+    } | null;
+    if (keyData) {
+      mcpAuthTier = "paid";
+    }
+  }
+
+  // --- Rate limiting ---
+  if (env.CONSENSUS_CACHE) {
+    const clientIP = request.headers.get("CF-Connecting-IP") || "unknown";
+    const limit = mcpAuthTier === "paid" ? 500 : 30; // 500/hr paid, 30/hr free
+    const rlKey = `ratelimit:mcp:${mcpAuthTier}:${clientIP}`;
+    try {
+      const current = parseInt((await env.CONSENSUS_CACHE.get(rlKey)) || "0");
+      if (current >= limit) {
+        return new Response(
+          JSON.stringify({ error: "MCP rate limit exceeded", limit, tier: mcpAuthTier }),
+          { status: 429, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
+        );
+      }
+      await env.CONSENSUS_CACHE.put(rlKey, String(current + 1), { expirationTtl: 3600 });
+    } catch {
+      // Don't block on rate-limit failures
+    }
   }
 
   let body: JSONRPCRequest | JSONRPCRequest[];
