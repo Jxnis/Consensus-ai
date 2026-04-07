@@ -11,6 +11,7 @@ import { normalizeRoutingBudget as _normalizeRoutingBudget, routingBudgetToCounc
 import { CouncilEngine } from "./council/engine";
 import { ConsensusRequest, CloudflareBindings } from "./types";
 import { handleMCPRequest } from "./mcp/server";
+import { WorkflowTracker, parseAgentStep } from "./router/workflow";
 import OpenAI from "openai";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
@@ -429,6 +430,56 @@ app.post("/v1/chat/completions", async (c) => {
     : undefined;
   const wantsFreeAlias = typeof body.model === "string" && body.model === "__alias:free";
 
+  // === SPRINT 2: X-Agent-Step header ===
+  const agentStep = parseAgentStep(c.req.header("X-Agent-Step"));
+  if (agentStep.complexityTier) {
+    // Header overrides scored complexity
+    (complexity as any).tier = agentStep.complexityTier;
+    console.log(`[Agent-Step] Override complexity → ${agentStep.complexityTier}`);
+  }
+  if (agentStep.forceCouncilMode) {
+    (body as any).mode = "council";
+    console.log(`[Agent-Step] Override mode → council (verification step)`);
+  }
+
+  // === SPRINT 2: Workflow Budget ===
+  const workflowBudgetParam = body.workflow_budget as { session_id?: string; total_budget_usd?: number } | undefined;
+  const workflowSessionId = workflowBudgetParam?.session_id || sessionId;
+  let workflowBudgetRemaining: number | null = null;
+  let workflowPctUsed: number | null = null;
+
+  if (workflowSessionId && c.env.CONSENSUS_CACHE) {
+    const tracker = new WorkflowTracker(c.env.CONSENSUS_CACHE);
+
+    // Register budget if provided for first time
+    if (workflowBudgetParam?.total_budget_usd && workflowBudgetParam.total_budget_usd > 0) {
+      await tracker.initBudget(workflowSessionId, workflowBudgetParam.total_budget_usd);
+    }
+
+    try {
+      const tierInfo = await tracker.getEffectiveTier(workflowSessionId, routingBudget);
+      // Downgrade routing budget if workflow spending threshold crossed
+      if (tierInfo.tier !== routingBudget) {
+        console.log(`[Workflow] Budget downgrade: ${routingBudget} → ${tierInfo.tier} (${tierInfo.pctUsed}% used)`);
+        (body as any)._workflowOverrideBudget = tierInfo.tier;
+      }
+      workflowBudgetRemaining = tierInfo.remainingUsd;
+      workflowPctUsed = tierInfo.pctUsed;
+    } catch (e: any) {
+      if (e.message === "WORKFLOW_BUDGET_EXHAUSTED") {
+        return c.json({
+          error: "Workflow budget exhausted",
+          message: "This session has used ≥95% of its allocated budget. Add more budget or start a new session.",
+          session_id: workflowSessionId,
+          request_id: requestId,
+        }, 402);
+      }
+    }
+  }
+
+  // Apply workflow budget override
+  const effectiveRoutingBudget: RoutingBudget = ((body as any)._workflowOverrideBudget as RoutingBudget) || routingBudget;
+
   // TASK-P4.11: Extract mode parameter — DEFAULT to smart routing (was "council")
   const rawMode = body.mode as string | undefined;
   const mode: "default" | "council" = (rawMode === "default" || rawMode === "council") ? rawMode : "default";
@@ -498,7 +549,7 @@ app.post("/v1/chat/completions", async (c) => {
       if (c.env.SCORE_DB) {
         // Check cache first (saves ~4ms D1 query)
         const cacheVersion = bypassCache ? null : await routeCache.getCacheVersion();
-        const cachedModelId = bypassCache ? null : await routeCache.getCachedRouteWithVersion(effectiveTopic, routingBudget, cacheVersion);
+        const cachedModelId = bypassCache ? null : await routeCache.getCachedRouteWithVersion(effectiveTopic, effectiveRoutingBudget, cacheVersion);
 
         if (cachedModelId) {
           // Cache hit! Use cached model as primary candidate
@@ -512,7 +563,7 @@ app.post("/v1/chat/completions", async (c) => {
 
             // Still get backups from D1 for failover
             const { getModelsForDomain } = await import('./db/queries');
-            const backupModels = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, routingBudget, complexity.tier);
+            const backupModels = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, effectiveRoutingBudget, complexity.tier);
             if (backupModels && backupModels.length > 1) {
               // Add top 2 backups (excluding cached model if it appears)
               const backups = backupModels.filter(m => m.id !== cachedModelId).slice(0, 2);
@@ -544,7 +595,7 @@ app.post("/v1/chat/completions", async (c) => {
               semanticResult = await semanticRouter.route(
                 query,
                 topLevelDomain,
-                routingBudget,
+                effectiveRoutingBudget,
                 complexity.tier
               );
 
@@ -559,7 +610,7 @@ app.post("/v1/chat/completions", async (c) => {
                   console.log(`[Semantic Router] Selected ${semanticResult.model_id} (score: ${semanticResult.final_score.toFixed(3)}, latency: ${semanticResult.semantic_latency_ms}ms)`);
 
                   // Add backup models for failover
-                  const backups = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, routingBudget, complexity.tier);
+                  const backups = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, effectiveRoutingBudget, complexity.tier);
                   if (backups && backups.length > 1) {
                     const backupModels = backups.filter(m => m.id !== semanticResult!.model_id).slice(0, 2);
                     candidateModels.push(...backupModels);
@@ -567,7 +618,7 @@ app.post("/v1/chat/completions", async (c) => {
 
                   // Cache the semantic result
                   c.executionCtx.waitUntil(
-                    routeCache.cacheRoute(effectiveTopic, routingBudget, semanticResult.model_id, primaryModel.name)
+                    routeCache.cacheRoute(effectiveTopic, effectiveRoutingBudget, semanticResult.model_id, primaryModel.name)
                   );
                 }
               }
@@ -579,7 +630,7 @@ app.post("/v1/chat/completions", async (c) => {
           // Fallback to traditional D1 routing if semantic routing disabled or failed
           if (candidateModels.length === 0) {
             const { getModelsForDomain } = await import('./db/queries');
-            const models = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, routingBudget, complexity.tier);
+            const models = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, effectiveRoutingBudget, complexity.tier);
 
             if (models && models.length > 0) {
               candidateModels = models.slice(0, 3); // Top 3 models
@@ -588,7 +639,7 @@ app.post("/v1/chat/completions", async (c) => {
 
               // Cache the top model for future requests (async, don't block)
               c.executionCtx.waitUntil(
-                routeCache.cacheRoute(effectiveTopic, routingBudget, models[0].id, models[0].name)
+                routeCache.cacheRoute(effectiveTopic, effectiveRoutingBudget, models[0].id, models[0].name)
               );
             }
           }
@@ -864,6 +915,17 @@ app.post("/v1/chat/completions", async (c) => {
             );
           }
 
+          // Workflow budget: record spend (async, don't block response)
+          if (workflowSessionId && c.env.CONSENSUS_CACHE) {
+            const tracker = new WorkflowTracker(c.env.CONSENSUS_CACHE);
+            const spendUsd = tokenEstimate > 0
+              ? ((tokenEstimate / 1_000_000) * model.input_price) + (500 / 1_000_000 * model.output_price)
+              : (complexity.tier === "SIMPLE" ? 0.001 : complexity.tier === "REASONING" ? 0.008 : 0.002);
+            c.executionCtx.waitUntil(
+              tracker.recordRequest(workflowSessionId, model.id, spendUsd, latency, complexity.tier)
+            );
+          }
+
           // Record telemetry (async, don't block response)
           c.executionCtx.waitUntil(telemetry.record(model.id, latency, true));
           c.executionCtx.waitUntil(Promise.all([
@@ -901,6 +963,21 @@ app.post("/v1/chat/completions", async (c) => {
             ? parseFloat((((tokenEstimate / 1_000_000) * model.input_price) + (500 / 1_000_000 * model.output_price)).toFixed(6))
             : undefined;
 
+          const responseHeaders: Record<string, string> = {
+            'X-ArcRouter-Model': model.id,
+            'X-ArcRouter-Topic': topic,
+            'X-ArcRouter-Complexity': complexity.tier,
+          };
+          if (workflowBudgetRemaining !== null) {
+            responseHeaders['X-ArcRouter-Budget-Remaining'] = workflowBudgetRemaining.toString();
+          }
+          if (workflowPctUsed !== null) {
+            responseHeaders['X-ArcRouter-Budget-Used-Pct'] = workflowPctUsed.toString();
+          }
+          if (agentStep.complexityTier) {
+            responseHeaders['X-ArcRouter-Agent-Step'] = c.req.header("X-Agent-Step") || "";
+          }
+
           return c.json({
             ...completion,
             routing: {
@@ -912,16 +989,18 @@ app.post("/v1/chat/completions", async (c) => {
               topic_confidence: Math.round(topicDetection.confidence * 100) / 100,
               complexity_tier: complexity.tier,
               complexity_confidence: Math.round((complexity.confidence ?? 0.8) * 100) / 100,
-              budget: routingBudget,
+              budget: effectiveRoutingBudget,
               data_source: dataSource,
               failover_count: failoverCount,
               models_considered: modelsConsidered,
               is_agentic: complexity.isAgentic,
+              ...(agentStep.complexityTier && { agent_step_override: agentStep.complexityTier }),
               ...(estimatedCostUsd !== undefined && { estimated_cost_usd: estimatedCostUsd }),
               ...(savingsVsGpt4 !== undefined && { savings_vs_gpt4_pct: savingsVsGpt4 }),
               ...(sessionId && { session_pinned: dataSource === 'session_pin' }),
+              ...(workflowBudgetRemaining !== null && { workflow_budget_remaining_usd: workflowBudgetRemaining }),
             },
-          });
+          }, 200, responseHeaders);
         }
       } catch (error: any) {
         const latency = Date.now() - startTime;
@@ -1295,6 +1374,28 @@ app.get("/v1/models/scores", async (c) => {
       message: err instanceof Error ? err.message : String(err),
     }, 500);
   }
+});
+
+// Workflow: Get usage stats for a session (no auth required — session_id is the secret)
+app.get("/v1/workflow/:session_id/usage", async (c) => {
+  const sessionId = c.req.param("session_id");
+
+  if (!sessionId || sessionId.length < 4) {
+    return c.json({ error: "Invalid session_id" }, 400);
+  }
+
+  if (!c.env.CONSENSUS_CACHE) {
+    return c.json({ error: "Cache not available" }, 503);
+  }
+
+  const tracker = new WorkflowTracker(c.env.CONSENSUS_CACHE);
+  const usage = await tracker.getUsage(sessionId);
+
+  if (!usage) {
+    return c.json({ error: "Session not found or expired", session_id: sessionId }, 404);
+  }
+
+  return c.json(usage);
 });
 
 // Admin: Create API key (requires admin auth + rate limit)
