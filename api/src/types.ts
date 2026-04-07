@@ -4,6 +4,8 @@ export interface ComplexityScore {
   tier: ComplexityTier;
   score: number;
   reason: string;
+  confidence: number;  // 0-1 sigmoid-calibrated confidence in tier classification
+  isAgentic: boolean;  // true when request contains tools[] or agentic keywords
 }
 
 export interface ModelInfo {

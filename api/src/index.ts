@@ -5,11 +5,12 @@ import { paymentMiddleware } from "@x402/hono";
 import { x402ResourceServer, HTTPFacilitatorClient } from "@x402/core/server";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
 import { z } from "zod";
-import { scorePrompt, detectTopicDetailed } from "./router/scorer";
+import { scorePrompt, detectAgentic, detectTopicDetailed } from "./router/scorer";
 import { selectBestModel } from "./router/model-registry";
 import { normalizeRoutingBudget as _normalizeRoutingBudget, routingBudgetToCouncilBudget, type RoutingBudget } from "./router/budget";
 import { CouncilEngine } from "./council/engine";
 import { ConsensusRequest, CloudflareBindings } from "./types";
+import { handleMCPRequest } from "./mcp/server";
 import OpenAI from "openai";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
@@ -248,6 +249,25 @@ app.use("/v1/chat/completions", async (c, next) => {
     body = JSON.parse(rawBody);
     budget = String(body.budget ?? "").toLowerCase();
 
+    // Model aliases: resolve shorthand model names before routing
+    const MODEL_ALIASES: Record<string, string> = {
+      "free": "__alias:free",                      // route to best free model
+      "gpt": "openai/gpt-4o",
+      "gpt-4o": "openai/gpt-4o",
+      "gpt-4o-mini": "openai/gpt-4o-mini",
+      "claude": "anthropic/claude-sonnet-4-5",     // Claude Sonnet (latest)
+      "claude-sonnet": "anthropic/claude-sonnet-4-5",
+      "claude-haiku": "anthropic/claude-haiku-4-5-20251001",
+      "claude-opus": "anthropic/claude-opus-4-5",
+      "gemini": "google/gemini-2.5-flash-lite-preview-09-2025",
+      "gemini-pro": "google/gemini-2.5-pro",
+      "deepseek": "deepseek/deepseek-chat-v3-0324",
+      "deepseek-r1": "deepseek/deepseek-r1",
+    };
+    if (typeof body.model === "string" && MODEL_ALIASES[body.model.toLowerCase()]) {
+      body = { ...body, model: MODEL_ALIASES[body.model.toLowerCase()] };
+    }
+
     const messages = Array.isArray(body.messages)
       ? (body.messages as Array<{ role: string; content?: unknown }>)
       : [];
@@ -259,8 +279,9 @@ app.use("/v1/chat/completions", async (c, next) => {
       ? (messages[messages.length - 1]!.content as string)
       : "";
 
+    const hasToolsArray = Array.isArray(body.tools) && (body.tools as unknown[]).length > 0;
     if (lastMessage) {
-      complexityTier = scorePrompt(lastMessage).tier;
+      complexityTier = scorePrompt(lastMessage, hasToolsArray).tier;
     }
 
     // Never downgrade complexity for large total-context requests.
@@ -272,6 +293,8 @@ app.use("/v1/chat/completions", async (c, next) => {
 
     c.set("parsedBody" as never, body as never);
     c.set("complexityTier" as never, complexityTier as never);
+    c.set("tokenEstimate" as never, totalTokenEstimate as never);
+    c.set("hasToolsArray" as never, hasToolsArray as never);
   } catch {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
@@ -388,8 +411,23 @@ app.post("/v1/chat/completions", async (c) => {
 
   // Use pre-scored complexity from middleware if available (avoids redundant scoring)
   const preScored = c.get("complexityTier" as never) as "SIMPLE" | "MEDIUM" | "COMPLEX" | "REASONING" | undefined;
-  const complexity = preScored ? { tier: preScored } : scorePrompt(sanitizedPrompt);
+  const preHasTools = (c.get("hasToolsArray" as never) as boolean | undefined) ?? Array.isArray(body.tools);
+  const complexityResult = preScored
+    ? { tier: preScored, confidence: 0.8, isAgentic: preHasTools, score: 0, reason: "" }
+    : scorePrompt(sanitizedPrompt, preHasTools);
+  const complexity = complexityResult;
   const engine = new CouncilEngine(c.env);
+
+  // Extract quick-win parameters from request body
+  const sessionId = typeof body.session_id === "string" ? body.session_id : undefined;
+  const maxCostUsd = typeof body.max_cost === "number" ? body.max_cost : undefined;
+  const excludeModels = Array.isArray(body.exclude_models)
+    ? (body.exclude_models as unknown[]).filter((m): m is string => typeof m === "string")
+    : [];
+  const forcedModelId = typeof body.model === "string" && !body.model.startsWith("__alias:")
+    ? body.model
+    : undefined;
+  const wantsFreeAlias = typeof body.model === "string" && body.model === "__alias:free";
 
   // TASK-P4.11: Extract mode parameter — DEFAULT to smart routing (was "council")
   const rawMode = body.mode as string | undefined;
@@ -422,11 +460,25 @@ app.post("/v1/chat/completions", async (c) => {
   // TASK-P4.10, P4.11, P4.13, P4.15, P4.16: Smart Routing with Circuit Breaker and Failover
   // Uses D1 database for model selection, supports streaming, automatic failover
   if (mode === "default") {
+    // Session pinning: check if caller has a pinned model for this session
+    let sessionPinnedModelId: string | null = null;
+    if (sessionId && c.env.CONSENSUS_CACHE) {
+      try {
+        sessionPinnedModelId = await c.env.CONSENSUS_CACHE.get(`session:${sessionId}`);
+        if (sessionPinnedModelId) {
+          console.log(`[Smart Router] Session pin HIT for ${sessionId}: ${sessionPinnedModelId}`);
+        }
+      } catch { /* non-critical */ }
+    }
+
     // Detect topic with detailed detection
     const topicDetection = detectTopicDetailed(sanitizedPrompt);
     const topic = topicDetection.secondary || topicDetection.primary;
 
-    console.log(`[Smart Router] Topic detected: ${topic} (confidence: ${topicDetection.confidence.toFixed(2)})`);
+    // Agentic override: prefer "code" topic for tool-use requests
+    const effectiveTopic = complexity.isAgentic && topic === "general" ? "code" : topic;
+
+    console.log(`[Smart Router] Topic detected: ${effectiveTopic} (confidence: ${topicDetection.confidence.toFixed(2)}, agentic: ${complexity.isAgentic})`);
 
     // Initialize circuit breaker, telemetry, and route cache
     const { ModelCircuitBreaker } = await import('./router/circuit-breaker');
@@ -446,7 +498,7 @@ app.post("/v1/chat/completions", async (c) => {
       if (c.env.SCORE_DB) {
         // Check cache first (saves ~4ms D1 query)
         const cacheVersion = bypassCache ? null : await routeCache.getCacheVersion();
-        const cachedModelId = bypassCache ? null : await routeCache.getCachedRouteWithVersion(topic, routingBudget, cacheVersion);
+        const cachedModelId = bypassCache ? null : await routeCache.getCachedRouteWithVersion(effectiveTopic, routingBudget, cacheVersion);
 
         if (cachedModelId) {
           // Cache hit! Use cached model as primary candidate
@@ -460,7 +512,7 @@ app.post("/v1/chat/completions", async (c) => {
 
             // Still get backups from D1 for failover
             const { getModelsForDomain } = await import('./db/queries');
-            const backupModels = await getModelsForDomain(c.env.SCORE_DB, topic, routingBudget, complexity.tier);
+            const backupModels = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, routingBudget, complexity.tier);
             if (backupModels && backupModels.length > 1) {
               // Add top 2 backups (excluding cached model if it appears)
               const backups = backupModels.filter(m => m.id !== cachedModelId).slice(0, 2);
@@ -487,7 +539,7 @@ app.post("/v1/chat/completions", async (c) => {
               const query = typeof lastMessage?.content === 'string' ? lastMessage.content : JSON.stringify(lastMessage?.content || '');
 
               // Use parent domain for semantic routing (embeddings are top-level only)
-              const topLevelDomain = topic.includes('/') ? topic.split('/')[0] : topic;
+              const topLevelDomain = effectiveTopic.includes('/') ? effectiveTopic.split('/')[0] : effectiveTopic;
 
               semanticResult = await semanticRouter.route(
                 query,
@@ -507,7 +559,7 @@ app.post("/v1/chat/completions", async (c) => {
                   console.log(`[Semantic Router] Selected ${semanticResult.model_id} (score: ${semanticResult.final_score.toFixed(3)}, latency: ${semanticResult.semantic_latency_ms}ms)`);
 
                   // Add backup models for failover
-                  const backups = await getModelsForDomain(c.env.SCORE_DB, topic, routingBudget, complexity.tier);
+                  const backups = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, routingBudget, complexity.tier);
                   if (backups && backups.length > 1) {
                     const backupModels = backups.filter(m => m.id !== semanticResult!.model_id).slice(0, 2);
                     candidateModels.push(...backupModels);
@@ -515,7 +567,7 @@ app.post("/v1/chat/completions", async (c) => {
 
                   // Cache the semantic result
                   c.executionCtx.waitUntil(
-                    routeCache.cacheRoute(topic, routingBudget, semanticResult.model_id, primaryModel.name)
+                    routeCache.cacheRoute(effectiveTopic, routingBudget, semanticResult.model_id, primaryModel.name)
                   );
                 }
               }
@@ -527,7 +579,7 @@ app.post("/v1/chat/completions", async (c) => {
           // Fallback to traditional D1 routing if semantic routing disabled or failed
           if (candidateModels.length === 0) {
             const { getModelsForDomain } = await import('./db/queries');
-            const models = await getModelsForDomain(c.env.SCORE_DB, topic, routingBudget, complexity.tier);
+            const models = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, routingBudget, complexity.tier);
 
             if (models && models.length > 0) {
               candidateModels = models.slice(0, 3); // Top 3 models
@@ -536,7 +588,7 @@ app.post("/v1/chat/completions", async (c) => {
 
               // Cache the top model for future requests (async, don't block)
               c.executionCtx.waitUntil(
-                routeCache.cacheRoute(topic, routingBudget, models[0].id, models[0].name)
+                routeCache.cacheRoute(effectiveTopic, routingBudget, models[0].id, models[0].name)
               );
             }
           }
@@ -549,7 +601,7 @@ app.post("/v1/chat/completions", async (c) => {
     // Fallback to hardcoded registry if D1 fails or returns no results
     if (candidateModels.length === 0) {
       console.log(`[Smart Router] Using fallback registry`);
-      const topLevelTopic = topic.split('/')[0] as any;
+      const topLevelTopic = effectiveTopic.split('/')[0] as any;
       const fallback = selectBestModel(topLevelTopic, complexity.tier, councilBudget);
       candidateModels = [{
         id: fallback.id,
@@ -559,6 +611,82 @@ app.post("/v1/chat/completions", async (c) => {
         output_price: fallback.outputPricePer1M,
       }];
     }
+
+    // === QUICK WINS: Apply request-level filters to candidate pool ===
+
+    // 1. Forced model override (body.model = specific model ID)
+    if (forcedModelId) {
+      const found = candidateModels.find(m => m.id === forcedModelId);
+      if (found) {
+        // Promote requested model to first position
+        candidateModels = [found, ...candidateModels.filter(m => m.id !== forcedModelId)];
+      } else {
+        // Insert forced model as primary candidate (will be tried first)
+        candidateModels = [{ id: forcedModelId, name: forcedModelId, provider: 'Unknown', input_price: 0, output_price: 0 }, ...candidateModels];
+      }
+    }
+
+    // 2. Session pinning: promote pinned model to first position
+    if (sessionPinnedModelId && !forcedModelId) {
+      const pinned = candidateModels.find(m => m.id === sessionPinnedModelId);
+      if (pinned) {
+        candidateModels = [pinned, ...candidateModels.filter(m => m.id !== sessionPinnedModelId)];
+      } else {
+        // Pinned model not in candidates (DB changed?), insert it as primary
+        candidateModels = [{ id: sessionPinnedModelId, name: sessionPinnedModelId, provider: 'Unknown', input_price: 0, output_price: 0 }, ...candidateModels];
+      }
+      dataSource = 'session_pin';
+    }
+
+    // 3. Exclude models from request body
+    if (excludeModels.length > 0) {
+      const filtered = candidateModels.filter(m => !excludeModels.includes(m.id));
+      if (filtered.length > 0) candidateModels = filtered;
+      // If all models excluded, keep original list (better than empty)
+    }
+
+    // 4. Context-length filtering: remove models that can't handle the request size
+    const tokenEstimate = (c.get("tokenEstimate" as never) as number | undefined) ?? 0;
+    if (tokenEstimate > 100) {
+      const contextFiltered = candidateModels.filter(m => {
+        const contextLen = (m as any).context_length;
+        return !contextLen || contextLen >= tokenEstimate * 1.2; // 20% buffer
+      });
+      if (contextFiltered.length > 0) candidateModels = contextFiltered;
+    }
+
+    // 5. max_cost filtering: exclude models exceeding per-request budget
+    if (maxCostUsd !== undefined && maxCostUsd > 0) {
+      // Estimate tokens: assume ~500 output tokens for typical request
+      const estimatedOutputTokens = 500;
+      const costFiltered = candidateModels.filter(m => {
+        const inputCost = ((tokenEstimate || 200) / 1_000_000) * m.input_price;
+        const outputCost = (estimatedOutputTokens / 1_000_000) * m.output_price;
+        return (inputCost + outputCost) <= maxCostUsd;
+      });
+      if (costFiltered.length > 0) {
+        candidateModels = costFiltered;
+      } else {
+        // Graceful degradation: if nothing fits budget, pick cheapest available
+        candidateModels = [...candidateModels].sort((a, b) => a.input_price - b.input_price).slice(0, 1);
+      }
+    }
+
+    // 6. Agentic preference: boost tool-capable models (Claude, GPT-4o) to front
+    if (complexity.isAgentic && !forcedModelId && !sessionPinnedModelId) {
+      const TOOL_CAPABLE_PATTERNS = [/claude/i, /gpt-4o/i, /gemini.*pro/i, /mistral.*large/i];
+      const toolCapable = candidateModels.filter(m =>
+        TOOL_CAPABLE_PATTERNS.some(p => p.test(m.id))
+      );
+      const others = candidateModels.filter(m =>
+        !TOOL_CAPABLE_PATTERNS.some(p => p.test(m.id))
+      );
+      if (toolCapable.length > 0) {
+        candidateModels = [...toolCapable, ...others];
+      }
+    }
+
+    const modelsConsidered = candidateModels.length;
 
     // Filter out circuit-broken models
     const healthyModels: typeof candidateModels = [];
@@ -574,7 +702,7 @@ app.post("/v1/chat/completions", async (c) => {
     if (healthyModels.length === 0) {
       // Last resort: try hardcoded fallback registry (known-working models)
       console.warn('[Smart Router] All D1 candidates circuit-broken, trying fallback registry');
-      const topLevelTopic = topic.split('/')[0] as any;
+      const topLevelTopic = effectiveTopic.split('/')[0] as any;
       const fallback = selectBestModel(topLevelTopic, complexity.tier, councilBudget);
       const fallbackHealthy = await circuitBreaker.isModelHealthy(fallback.id);
       if (fallbackHealthy) {
@@ -729,6 +857,13 @@ app.post("/v1/chat/completions", async (c) => {
           // Success! Record and return
           await circuitBreaker.recordSuccess(model.id);
 
+          // Session pinning: save successful model for future requests with same session_id
+          if (sessionId && c.env.CONSENSUS_CACHE) {
+            c.executionCtx.waitUntil(
+              c.env.CONSENSUS_CACHE.put(`session:${sessionId}`, model.id, { expirationTtl: 3600 })
+            );
+          }
+
           // Record telemetry (async, don't block response)
           c.executionCtx.waitUntil(telemetry.record(model.id, latency, true));
           c.executionCtx.waitUntil(Promise.all([
@@ -756,6 +891,16 @@ app.post("/v1/chat/completions", async (c) => {
             );
           }
 
+          // Routing metadata enrichment
+          const avgModelPrice = (model.input_price + model.output_price) / 2;
+          const GPT4O_AVG_PRICE = 10.0; // $10/1M tokens avg
+          const savingsVsGpt4 = avgModelPrice > 0 && avgModelPrice < GPT4O_AVG_PRICE
+            ? Math.round((1 - avgModelPrice / GPT4O_AVG_PRICE) * 100)
+            : undefined;
+          const estimatedCostUsd = tokenEstimate > 0
+            ? parseFloat((((tokenEstimate / 1_000_000) * model.input_price) + (500 / 1_000_000 * model.output_price)).toFixed(6))
+            : undefined;
+
           return c.json({
             ...completion,
             routing: {
@@ -764,11 +909,17 @@ app.post("/v1/chat/completions", async (c) => {
               model_name: model.name,
               provider: model.provider,
               topic_detected: topic,
-              topic_confidence: topicDetection.confidence,
+              topic_confidence: Math.round(topicDetection.confidence * 100) / 100,
               complexity_tier: complexity.tier,
+              complexity_confidence: Math.round((complexity.confidence ?? 0.8) * 100) / 100,
               budget: routingBudget,
               data_source: dataSource,
               failover_count: failoverCount,
+              models_considered: modelsConsidered,
+              is_agentic: complexity.isAgentic,
+              ...(estimatedCostUsd !== undefined && { estimated_cost_usd: estimatedCostUsd }),
+              ...(savingsVsGpt4 !== undefined && { savings_vs_gpt4_pct: savingsVsGpt4 }),
+              ...(sessionId && { session_pinned: dataSource === 'session_pin' }),
             },
           });
         }
@@ -1889,6 +2040,12 @@ app.get("/admin/db-health", async (c) => {
       message: err instanceof Error ? err.message : String(err),
     }, 500);
   }
+});
+
+// MCP Server — Exposes ArcRouter as an MCP tool for Claude Code, Cursor, Windsurf
+// Install: claude mcp add arcrouter --transport http https://api.arcrouter.com/mcp
+app.all("/mcp", async (c) => {
+  return handleMCPRequest(c.req.raw, c.env);
 });
 
 // Export with scheduled handler for cron trigger

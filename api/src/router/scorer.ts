@@ -24,11 +24,61 @@ const REASONING_MARKERS = [
   /\b(plan|strategy|architecture|system design)\b/i,
 ];
 
+// Agentic request keywords — signals tool-use / file-system / execution context
+const AGENTIC_KEYWORDS = [
+  /\bread\s+file\b/i, /\bedit\s+file\b/i, /\bwrite\s+file\b/i, /\bdelete\s+file\b/i,
+  /\brun\s+test/i, /\bexecute\s+code/i, /\brun\s+command/i, /\bbash\s+command/i,
+  /\bdeploy\s+(to|app|service)/i, /\bgit\s+(commit|push|pull|checkout)/i,
+  /\bcall\s+(function|tool|api)\b/i, /\buse\s+tool\b/i, /\btool\s+call/i,
+  /\bfunction_call\b/i, /\btool_use\b/i,
+];
+
+/**
+ * Detect if a request is agentic (tool-use, file-system operations, code execution).
+ * Checks both the prompt text and the presence of a tools[] array in the request body.
+ */
+export function detectAgentic(prompt: string, hasToolsArray = false): boolean {
+  if (hasToolsArray) return true;
+  return AGENTIC_KEYWORDS.some(pattern => pattern.test(prompt));
+}
+
+/**
+ * Sigmoid confidence calibration for tier classification.
+ * Returns 0-1 confidence based on distance from tier boundaries.
+ * Low confidence (<0.65) means the prompt is near a tier boundary.
+ */
+function computeTierConfidence(
+  score: number,
+  tier: ComplexityTier,
+  reasoningHits: number
+): number {
+  let distance: number;
+
+  if (tier === "SIMPLE") {
+    // Boundary at score=12. Low score = high confidence in SIMPLE.
+    distance = (12 - score) / 12; // 1.0 at score=0, 0 at score=12
+  } else if (tier === "MEDIUM") {
+    // Bounded between 12 and 35. Center ~23. Distance from nearest boundary.
+    const distLower = score - 12;
+    const distUpper = 35 - score;
+    distance = Math.min(distLower, distUpper) / 12; // 0 at boundary, 1 at center
+  } else {
+    // COMPLEX or REASONING. Boundary at score=35.
+    distance = Math.min((score - 35) / 40, 1); // 0 at boundary, 1 at score=75
+    if (tier === "REASONING" && reasoningHits >= 3) {
+      distance = Math.min(distance + 0.3, 1);
+    }
+  }
+
+  // Sigmoid: sigmoid(8 * distance). Saturates quickly near ±1.
+  return 1 / (1 + Math.exp(-8 * distance));
+}
+
 /**
  * LocalScorer: Analyzes prompt complexity in <1ms without LLM calls.
  * Follows the "ClawRouter" pattern of fast, deterministic routing.
  */
-export function scorePrompt(prompt: string): ComplexityScore {
+export function scorePrompt(prompt: string, hasToolsArray = false): ComplexityScore {
   const length = prompt.length;
   let score = 0;
   let reasoningHits = 0;
@@ -66,10 +116,26 @@ export function scorePrompt(prompt: string): ComplexityScore {
     tier = "REASONING";
   }
 
+  const confidence = computeTierConfidence(score, tier, reasoningHits);
+  const isAgentic = detectAgentic(prompt, hasToolsArray);
+
+  // Low-confidence near SIMPLE/MEDIUM boundary → default to MEDIUM (safer choice)
+  if (confidence < 0.65 && tier === "SIMPLE" && score >= 8) {
+    return {
+      tier: "MEDIUM",
+      score,
+      confidence,
+      isAgentic,
+      reason: `Ambiguous (score: ${score}, confidence: ${confidence.toFixed(2)}) — defaulting to MEDIUM`,
+    };
+  }
+
   return {
     tier,
     score,
-    reason: `Self-scored ${tier} (score: ${score}) based on length and keyword density.`
+    confidence,
+    isAgentic,
+    reason: `Self-scored ${tier} (score: ${score}, confidence: ${confidence.toFixed(2)}) based on length and keyword density.`,
   };
 }
 
