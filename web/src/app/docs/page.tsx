@@ -14,9 +14,11 @@ const sections = [
   { id: "request-params", title: "Request Parameters" },
   { id: "response-format", title: "Response Format" },
   { id: "streaming", title: "Streaming" },
+  { id: "agent-workflow", title: "Agent Workflow" },
   { id: "models-scores", title: "Models & Scores" },
   { id: "pricing", title: "Pricing & Limits" },
   { id: "sdks", title: "SDKs" },
+  { id: "mcp", title: "MCP Server" },
 ];
 
 export default function DocsPage() {
@@ -271,10 +273,30 @@ console.log(council.consensus); // { confidence, votes, ... }`}
                   <div className="border border-border rounded-xl p-6 bg-card">
                     <div className="flex items-center gap-3 mb-4">
                       <span className="px-2 py-1 bg-blue-500/10 text-blue-500 text-[10px] font-mono font-bold rounded uppercase">GET</span>
+                      <code className="text-sm text-foreground font-mono">/v1/usage</code>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Per-API-key usage statistics. Returns daily request counts and estimated costs. Requires authentication.
+                    </p>
+                  </div>
+
+                  <div className="border border-border rounded-xl p-6 bg-card">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="px-2 py-1 bg-blue-500/10 text-blue-500 text-[10px] font-mono font-bold rounded uppercase">GET</span>
+                      <code className="text-sm text-foreground font-mono">{`/v1/workflow/{session_id}/usage`}</code>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Workflow budget tracking. Returns total spend, models used, average latency, and tier distribution for a workflow session.
+                    </p>
+                  </div>
+
+                  <div className="border border-border rounded-xl p-6 bg-card">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="px-2 py-1 bg-blue-500/10 text-blue-500 text-[10px] font-mono font-bold rounded uppercase">GET</span>
                       <code className="text-sm text-foreground font-mono">/health</code>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Health check. Returns configuration status and whether the service is operational.
+                      Health check. Returns provider status, direct provider availability, and x402 wallet configuration.
                     </p>
                   </div>
                 </div>
@@ -309,8 +331,8 @@ console.log(council.consensus); // { confidence, votes, ... }`}
                             <tr>
                                 <td className="p-4 font-bold text-foreground">model</td>
                                 <td className="p-4 text-muted-foreground">string</td>
-                                <td className="p-4 text-muted-foreground">any</td>
-                                <td className="p-4 text-muted-foreground">Ignored — routing is automatic. Use &quot;arc-router-v1&quot; for compatibility.</td>
+                                <td className="p-4 text-muted-foreground">&quot;arc-router-v1&quot;</td>
+                                <td className="p-4 text-muted-foreground">Model alias (&quot;claude&quot;, &quot;gpt&quot;, &quot;gemini&quot;, &quot;deepseek&quot;, &quot;free&quot;) or specific model ID. Default routes automatically.</td>
                             </tr>
                             <tr>
                                 <td className="p-4 font-bold text-foreground">mode</td>
@@ -341,6 +363,30 @@ console.log(council.consensus); // { confidence, votes, ... }`}
                                 <td className="p-4 text-muted-foreground">number</td>
                                 <td className="p-4 text-muted-foreground">—</td>
                                 <td className="p-4 text-muted-foreground">Passed through to the model provider.</td>
+                            </tr>
+                            <tr>
+                                <td className="p-4 font-bold text-foreground">session_id</td>
+                                <td className="p-4 text-muted-foreground">string</td>
+                                <td className="p-4 text-muted-foreground">—</td>
+                                <td className="p-4 text-muted-foreground">Pin model selection across requests. Same session_id reuses the same model for 1 hour.</td>
+                            </tr>
+                            <tr>
+                                <td className="p-4 font-bold text-foreground">exclude_models</td>
+                                <td className="p-4 text-muted-foreground">string[]</td>
+                                <td className="p-4 text-muted-foreground">—</td>
+                                <td className="p-4 text-muted-foreground">Array of model IDs to exclude from selection.</td>
+                            </tr>
+                            <tr>
+                                <td className="p-4 font-bold text-foreground">max_cost</td>
+                                <td className="p-4 text-muted-foreground">number</td>
+                                <td className="p-4 text-muted-foreground">—</td>
+                                <td className="p-4 text-muted-foreground">Max cost per request in USD. Models above this price are excluded (graceful downgrade).</td>
+                            </tr>
+                            <tr>
+                                <td className="p-4 font-bold text-foreground">workflow_budget</td>
+                                <td className="p-4 text-muted-foreground">object</td>
+                                <td className="p-4 text-muted-foreground">—</td>
+                                <td className="p-4 text-muted-foreground">{`{ session_id, total_budget_usd }`} — Multi-step workflow with shared budget. Auto-downgrades at 60/80/95%.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -375,12 +421,18 @@ console.log(council.consensus); // { confidence, votes, ... }`}
     "selected_model": "google/gemini-2.0-flash-001",
     "model_name": "Gemini 2.0 Flash",
     "provider": "Google",
+    "call_path": "direct:google",
     "topic_detected": "science",
     "topic_confidence": 0.85,
     "complexity_tier": "MEDIUM",
-    "budget": "low",
+    "complexity_confidence": 0.72,
+    "budget": "auto",
     "data_source": "semantic",
-    "failover_count": 0
+    "failover_count": 0,
+    "models_considered": 8,
+    "is_agentic": false,
+    "estimated_cost_usd": 0.0003,
+    "savings_vs_gpt4_pct": 89
   }
 }`}
 </pre>
@@ -500,6 +552,90 @@ data: [DONE]`}
                 </div>
             </section>
 
+            {/* Agent Workflow */}
+            <section id="agent-workflow" className="space-y-8 scroll-mt-24">
+                <div>
+                   <h2 className="font-heading text-2xl text-foreground mb-4">Agent Workflow</h2>
+                   <p className="text-muted-foreground">
+                     Build multi-step agent workflows with automatic budget tracking, complexity hints, and model pinning.
+                   </p>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-mono text-sm font-bold text-foreground uppercase tracking-wide mb-4">X-Agent-Step Header</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Tell the router what kind of work each step does. This overrides automatic complexity scoring for better model selection.
+                    </p>
+                    <div className="border border-border rounded-xl overflow-hidden">
+                      <table className="w-full text-left text-sm font-mono">
+                        <thead className="bg-muted/50 border-b border-border text-muted-foreground">
+                          <tr>
+                            <th className="p-4 uppercase tracking-wider text-[10px]">Step Value</th>
+                            <th className="p-4 uppercase tracking-wider text-[10px]">Complexity</th>
+                            <th className="p-4 uppercase tracking-wider text-[10px]">Use For</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border text-xs">
+                          <tr>
+                            <td className="p-4 font-bold text-foreground">simple-action</td>
+                            <td className="p-4 text-muted-foreground">SIMPLE</td>
+                            <td className="p-4 text-muted-foreground">Formatting, extraction, simple lookups</td>
+                          </tr>
+                          <tr>
+                            <td className="p-4 font-bold text-foreground">code-generation</td>
+                            <td className="p-4 text-muted-foreground">COMPLEX + code topic</td>
+                            <td className="p-4 text-muted-foreground">Writing code, debugging</td>
+                          </tr>
+                          <tr>
+                            <td className="p-4 font-bold text-foreground">reasoning</td>
+                            <td className="p-4 text-muted-foreground">REASONING</td>
+                            <td className="p-4 text-muted-foreground">Analysis, planning, complex decisions</td>
+                          </tr>
+                          <tr>
+                            <td className="p-4 font-bold text-foreground">verification</td>
+                            <td className="p-4 text-muted-foreground">Council mode</td>
+                            <td className="p-4 text-muted-foreground">Cross-checking, validation</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-mono text-sm font-bold text-foreground uppercase tracking-wide mb-4">Workflow Budget</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Cap total spend across multi-step workflows. The router auto-downgrades budget tier as you approach limits.
+                    </p>
+                    <div className="bg-[#0a0a0b] p-6 rounded-xl border border-white/10 overflow-x-auto">
+<pre className="text-zinc-300 font-mono text-xs leading-relaxed">
+{`// First request: initialize workflow budget
+curl ${apiUrl}/chat/completions \\
+  -H "Authorization: Bearer sk_..." \\
+  -H "X-Agent-Step: planning" \\
+  -d '{
+    "messages": [{"role": "user", "content": "Plan the implementation"}],
+    "workflow_budget": {
+      "session_id": "agent-run-42",
+      "total_budget_usd": 5.00
+    }
+  }'
+
+// Response headers:
+// X-ArcRouter-Budget-Remaining: 4.998
+// X-ArcRouter-Budget-Used-Pct: 0.04
+
+// Check workflow usage:
+curl ${apiUrl.replace('/v1', '')}/v1/workflow/agent-run-42/usage`}
+</pre>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-4">
+                      Auto-downgrade thresholds: 60% used → economy models, 80% → free models, 95% → strict free only, 100% → 402 error.
+                    </p>
+                  </div>
+                </div>
+            </section>
+
             {/* Models & Scores */}
             <section id="models-scores" className="space-y-8 scroll-mt-24">
                 <div>
@@ -546,14 +682,60 @@ data: [DONE]`}
                 <div>
                    <h2 className="font-heading text-2xl text-foreground mb-4">SDKs & Integrations</h2>
                    <p className="text-muted-foreground">
-                     ArcRouter works with any OpenAI-compatible client. Below are tested integrations.
+                     Use the official ArcRouter SDK for the best experience, or drop in with any OpenAI-compatible client.
                    </p>
                 </div>
 
                 <div className="space-y-6">
+                  {/* ArcRouter SDK */}
+                  <div className="border border-border rounded-xl p-6 bg-card">
+                    <h3 className="font-heading text-lg mb-3 text-foreground">ArcRouter TypeScript SDK</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Official SDK with smart routing, council mode, streaming, workflow budgets, and x402 auto-payment.
+                    </p>
+                    <div className="bg-[#0a0a0b] p-4 rounded-lg border border-white/10 overflow-x-auto">
+<pre className="text-zinc-300 font-mono text-xs leading-relaxed">
+{`npm install arcrouter`}
+</pre>
+                    </div>
+                    <div className="bg-[#0a0a0b] p-4 rounded-lg border border-white/10 overflow-x-auto mt-4">
+<pre className="text-zinc-300 font-mono text-xs leading-relaxed">
+{`import { ArcRouter } from 'arcrouter';
+
+const arc = new ArcRouter({ apiKey: 'sk_...' });
+
+// Smart routing
+const res = await arc.chat('Write a Python parser');
+console.log(res.content);
+console.log(res.routing.model);           // e.g. "anthropic/claude-sonnet-4-5"
+console.log(res.routing.estimatedCostUsd); // e.g. 0.0008
+
+// Council mode
+const council = await arc.council('Is P = NP?');
+console.log(council.confidence, council.votes);
+
+// Streaming
+for await (const chunk of arc.stream('Write a story...')) {
+  process.stdout.write(chunk);
+}
+
+// Workflow with budget
+const wf = arc.workflow({ sessionId: 'agent-42', totalBudget: 5.00 });
+const plan = await wf.chat('Plan it', { agentStep: 'planning' });
+const code = await wf.chat('Build it', { agentStep: 'code-generation' });
+
+// x402 micropayments (no API key needed)
+import { privateKeyToAccount } from 'viem/accounts';
+const arc402 = new ArcRouter({
+  wallet: privateKeyToAccount('0x...'),
+});`}
+</pre>
+                    </div>
+                  </div>
+
                   {/* OpenAI SDK */}
                   <div className="border border-border rounded-xl p-6 bg-card">
-                    <h3 className="font-heading text-lg mb-3 text-foreground">OpenAI Python SDK</h3>
+                    <h3 className="font-heading text-lg mb-3 text-foreground">OpenAI Python SDK (Drop-in)</h3>
                     <div className="bg-[#0a0a0b] p-4 rounded-lg border border-white/10 overflow-x-auto">
 <pre className="text-zinc-300 font-mono text-xs leading-relaxed">
 {`from openai import OpenAI
@@ -575,7 +757,7 @@ stream = client.chat.completions.create(
     model="arc-router-v1",
     messages=[{"role": "user", "content": "Write a sorting algorithm"}],
     stream=True,
-    extra_body={"mode": "council", "budget": "low"}
+    extra_body={"mode": "council", "budget": "economy"}
 )
 
 for chunk in stream:
@@ -713,6 +895,10 @@ opencode
                             <span className="text-foreground">COMPLEX queries</span>
                             <span className="text-muted-foreground">$0.005 / request</span>
                         </div>
+                        <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
+                            <span className="text-foreground">REASONING queries</span>
+                            <span className="text-muted-foreground">$0.008 / request</span>
+                        </div>
                     </div>
                     <p className="text-sm text-muted-foreground mt-4">
                         API Key users pay a flat $0.002/request via Stripe metered billing, invoiced monthly. x402 users pay per-request with USDC on Base Mainnet via the Coinbase CDP facilitator — ideal for autonomous agents and agent-to-agent payments.
@@ -744,7 +930,47 @@ opencode
                     </div>
                 </div>
             </section>
-            
+
+            {/* MCP Server */}
+            <section id="mcp" className="space-y-8 scroll-mt-24">
+                <div>
+                   <h2 className="font-heading text-2xl text-foreground mb-4">MCP Server</h2>
+                   <p className="text-muted-foreground">
+                     ArcRouter exposes a <a href="https://modelcontextprotocol.io" className="text-foreground underline underline-offset-4 hover:opacity-70 transition-opacity">Model Context Protocol</a> (MCP) server for AI coding assistants like Claude Code, Cursor, and Cline.
+                   </p>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-mono text-sm font-bold text-foreground uppercase tracking-wide mb-4">Setup</h3>
+                    <div className="bg-[#0a0a0b] p-6 rounded-xl border border-white/10 overflow-x-auto">
+<pre className="text-zinc-300 font-mono text-xs leading-relaxed">
+{`# Add ArcRouter as an MCP server in Claude Code
+claude mcp add arcrouter --transport http https://api.arcrouter.com/mcp`}
+</pre>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-mono text-sm font-bold text-foreground uppercase tracking-wide mb-4">Available Tools</h3>
+                    <div className="grid md:grid-cols-3 gap-4">
+                      <div className="p-4 border border-border rounded-lg bg-card">
+                        <span className="font-mono text-xs font-bold text-foreground">arcrouter_chat</span>
+                        <p className="text-xs text-muted-foreground mt-1">Route a prompt to the best model. Supports budget, mode, and all routing parameters.</p>
+                      </div>
+                      <div className="p-4 border border-border rounded-lg bg-card">
+                        <span className="font-mono text-xs font-bold text-foreground">arcrouter_models</span>
+                        <p className="text-xs text-muted-foreground mt-1">List available models with benchmark scores, filtered by topic and budget.</p>
+                      </div>
+                      <div className="p-4 border border-border rounded-lg bg-card">
+                        <span className="font-mono text-xs font-bold text-foreground">arcrouter_health</span>
+                        <p className="text-xs text-muted-foreground mt-1">Check system status — API keys, database, routing, provider availability.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            </section>
+
           </div>
         </main>
       </div>

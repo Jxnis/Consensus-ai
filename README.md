@@ -77,7 +77,41 @@ council = client.chat.completions.create(
 )
 ```
 
-### TypeScript
+### TypeScript (ArcRouter SDK)
+
+```bash
+npm install arcrouter
+```
+
+```typescript
+import { ArcRouter } from 'arcrouter';
+
+const arc = new ArcRouter({ apiKey: 'sk_...' });
+
+// Smart routing — picks the best model for your prompt
+const res = await arc.chat('Calculate the p-value for chi-squared test');
+console.log(res.content);
+console.log(res.routing.model);           // e.g. "anthropic/claude-sonnet-4-5"
+console.log(res.routing.estimatedCostUsd); // e.g. 0.0008
+
+// Council mode — multi-model consensus
+const council = await arc.council('Is P = NP?');
+console.log(council.content, council.confidence);
+
+// Streaming
+for await (const chunk of arc.stream('Write a story...')) {
+  process.stdout.write(chunk);
+}
+
+// x402 micropayments — no API key needed
+import { privateKeyToAccount } from 'viem/accounts';
+const arc402 = new ArcRouter({
+  wallet: privateKeyToAccount('0x...'),
+});
+const paid = await arc402.chat('Complex query', { budget: 'premium' });
+```
+
+### TypeScript (OpenAI SDK drop-in)
 
 ```typescript
 import OpenAI from "openai";
@@ -93,8 +127,6 @@ const completion = await client.chat.completions.create({
 });
 
 console.log(completion.choices[0].message);
-// Routing metadata in response headers:
-// X-ArcRouter-Model, X-ArcRouter-Topic, X-ArcRouter-Budget
 ```
 
 ---
@@ -150,21 +182,49 @@ Response + Routing Metadata
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `messages` | array | required | OpenAI-format messages |
-| `model` | string | any | Ignored — routing is automatic |
+| `model` | string | `"arc-router-v1"` | Model alias (`"claude"`, `"gpt"`, `"gemini"`, `"deepseek"`, `"free"`) or specific model ID |
 | `mode` | string | `"default"` | `"default"` (smart route) or `"council"` (consensus) |
 | `budget` | string | `"auto"` | `"free"` / `"economy"` / `"auto"` / `"premium"` (legacy: low/medium/high) |
 | `stream` | boolean | `false` | SSE streaming |
+| `session_id` | string | — | Pin model selection across requests (1h TTL) |
+| `exclude_models` | string[] | — | Model IDs to exclude from selection |
+| `max_cost` | number | — | Max cost per request in USD (graceful downgrade) |
+| `workflow_budget` | object | — | `{ session_id, total_budget_usd }` for multi-step workflows |
+
+**Request headers:**
+
+| Header | Description |
+|--------|-------------|
+| `X-Agent-Step` | Agent workflow hint: `simple-action`, `reasoning`, `code-generation`, `verification` |
 
 **Response headers (default mode):**
-`X-ArcRouter-Model`, `X-ArcRouter-Topic`, `X-ArcRouter-Budget`, `X-ArcRouter-Confidence`, `X-ArcRouter-Failover-Count`
+`X-ArcRouter-Model`, `X-ArcRouter-Topic`, `X-ArcRouter-Budget`, `X-ArcRouter-Confidence`, `X-ArcRouter-Failover-Count`, `X-ArcRouter-Budget-Remaining`, `X-ArcRouter-Budget-Used-Pct`, `X-Compression-Ratio`, `X-Compression-Saved`
 
 ### `GET /v1/models/scores`
 
 Public endpoint. Returns all 345+ models with benchmark scores across 6 domains. No auth required.
 
+### `GET /v1/usage`
+
+Per-API-key usage stats. Returns daily request counts and costs over the last N days. Requires auth.
+
+### `GET /v1/workflow/:session_id/usage`
+
+Workflow budget tracking. Returns spend, models used, latency, and tier distribution for a workflow session.
+
 ### `GET /health`
 
-Service health check.
+Service health check. Shows provider status, direct provider availability, and x402 wallet configuration.
+
+### MCP Server
+
+ArcRouter exposes an MCP (Model Context Protocol) server at `/mcp` for AI coding assistants.
+
+```bash
+claude mcp add arcrouter --transport http https://api.arcrouter.com/mcp
+```
+
+Three tools: `arcrouter_chat`, `arcrouter_models`, `arcrouter_health`.
 
 ---
 
@@ -191,17 +251,17 @@ Service health check.
 
 ```
 ┌─────────────┐     ┌─────────────────┐     ┌──────────────────┐
-│   web/      │     │   api/          │     │   OpenRouter     │
-│ Next.js 16  │────▶│ Hono + CF       │────▶│   (345+ models)  │
-│ Landing +   │     │ Workers         │     │                  │
-│ Playground  │     │                 │     └──────────────────┘
-└─────────────┘     └────────┬────────┘
-                             │
-                    ┌────────▼────────┐     ┌──────────────────┐
-                    │  Cloudflare D1  │     │  Workers AI      │
-                    │  - models       │     │  Embeddings      │
-                    │  - benchmarks   │     │  (bge-base-en)   │
-                    │  - composites   │     └──────────────────┘
+│   web/      │     │   api/          │────▶│  Direct Providers│
+│ Next.js 16  │────▶│ Hono + CF       │     │  OpenAI, Anthropic│
+│ Landing +   │     │ Workers         │     │  Google, DeepSeek │
+│ Playground  │     │                 │     │  xAI              │
+└─────────────┘     └────────┬────────┘     └──────────────────┘
+                             │                       │
+┌─────────────┐     ┌────────▼────────┐     ┌────────▼─────────┐
+│   sdk/      │     │  Cloudflare D1  │     │  OpenRouter      │
+│ arcrouter   │────▶│  - models       │     │  (fallback,      │
+│ npm package │     │  - benchmarks   │     │   345+ models)   │
+└─────────────┘     │  - composites   │     └──────────────────┘
                     │  - routing log  │
                     └─────────────────┘
 ```
@@ -233,12 +293,21 @@ Service health check.
 ## Production Features
 
 - **Semantic routing** — Embedding-based reranking with Workers AI (free, 768-dim)
+- **Complexity-aware routing** — SIMPLE/MEDIUM/COMPLEX/REASONING tiers, auto-detected from prompt
+- **Direct provider access** — OpenAI, Anthropic, Google, DeepSeek, xAI direct API calls (no OpenRouter dependency)
 - **Circuit breaker** — Auto-disable failing models, 3-model failover chain
+- **Session pinning** — Pin model selection across multi-turn conversations (1h TTL)
+- **Model aliases** — `"claude"`, `"gpt"`, `"gemini"`, `"deepseek"`, `"free"` resolve to best model
+- **Agent workflow** — `X-Agent-Step` header for complexity override, workflow budget tracking with auto-downgrade
+- **Prompt compression** — Lossless compression (dedup, whitespace, JSON compaction) for long conversations
+- **Agentic detection** — Tool-use patterns detected, prefer tool-capable models
+- **MCP server** — Model Context Protocol integration for AI coding assistants
+- **TypeScript SDK** — `npm install arcrouter` with x402 auto-payment, streaming, workflow budgets
 - **Route cache** — KV decision caching, ~4ms savings per hit
-- **Routing telemetry** — Per-model latency, success rate, D1 history log
 - **Streaming** — Full SSE with routing metadata in headers
 - **Stripe billing** — Metered subscriptions with auto-downgrade on payment failure
 - **x402 micropayments** — USDC on Base via Coinbase CDP facilitator, supports agent-to-agent payments
+- **Per-key usage tracking** — `/v1/usage` endpoint with daily breakdowns
 - **Daily cron** — Automated scraper pipeline + score recalculation
 
 ---
@@ -272,15 +341,22 @@ pnpm run deploy
 
 - [x] Smart routing with benchmark scores
 - [x] Semantic routing (embedding-based reranking)
+- [x] Complexity-aware routing (SIMPLE/MEDIUM/COMPLEX/REASONING)
 - [x] Council mode (multi-model consensus)
 - [x] Circuit breaker + 3-model failover
+- [x] Direct provider access (OpenAI, Anthropic, Google, DeepSeek, xAI)
+- [x] TypeScript SDK with x402 auto-payment (`npm install arcrouter`)
+- [x] MCP server integration
+- [x] Agent workflow support (X-Agent-Step, workflow budgets)
+- [x] Session model pinning + model aliases
+- [x] Prompt compression
+- [x] Per-key usage tracking
 - [x] x402 micropayments (USDC on Base)
 - [x] Stripe metered billing
 - [x] Public rankings page
-- [ ] Direct provider integration (DeepSeek, Mistral)
 - [ ] Outcome-based learning (adjust scores from user feedback)
 - [ ] ML classifier routing (ModernBERT)
-- [ ] MCP tool server integration
+- [ ] Python SDK
 
 ---
 
