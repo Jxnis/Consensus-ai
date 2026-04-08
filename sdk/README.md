@@ -1,161 +1,185 @@
-# @consensus-cloud/sdk
+# arcrouter
 
-Official TypeScript SDK for ConsensusCloud - Multi-model consensus routing with x402 payment protocol.
+Official TypeScript SDK for [ArcRouter](https://arcrouter.com) — intelligent LLM routing with multi-model consensus.
 
 ## Installation
 
 ```bash
-npm install @consensus-cloud/sdk
-# or
-pnpm add @consensus-cloud/sdk
+npm install arcrouter
 ```
 
 ## Quick Start
 
 ```typescript
-import { ConsensusClient } from '@consensus-cloud/sdk';
-import { privateKeyToAccount } from 'viem/accounts';
+import { ArcRouter } from 'arcrouter';
 
-const account = privateKeyToAccount('0x...');
+const arc = new ArcRouter({ apiKey: 'sk_...' });
 
-const client = new ConsensusClient({
-  apiKey: 'your-api-key', // or use x402 payment
-  account, // for x402 signature
-});
-
-const response = await client.chat.completions.create({
-  messages: [{ role: 'user', content: 'What is 2+2?' }],
-  budget: 'low', // 'low' | 'medium' | 'high'
-});
-
-console.log(response.choices[0].message.content);
-console.log(`Consensus confidence: ${response.consensus.confidence}`);
+// Smart routing — picks the best model for your prompt
+const res = await arc.chat('Write a Python function to merge two sorted lists');
+console.log(res.content);
+console.log(res.routing.model);           // e.g. "anthropic/claude-sonnet-4-5"
+console.log(res.routing.estimatedCostUsd); // e.g. 0.0012
 ```
 
 ## Features
 
-- **OpenAI-Compatible API**: Drop-in replacement for OpenAI SDK
-- **x402 Payment Protocol**: Crypto-native micropayments with EIP-712 signatures
-- **Multi-Model Consensus**: Query multiple models and get verified responses
-- **TypeScript First**: Full type safety and IntelliSense support
+- **Smart Routing** — routes each prompt to the best model by topic, complexity, and budget
+- **Council Mode** — multi-model consensus for higher confidence answers
+- **Streaming** — async generator for real-time text output
+- **Workflow Budgets** — cap spend across multi-step agent workflows
+- **x402 Micropayments** — automatic USDC payments on Base (no API key needed)
+- **Auto Retry** — exponential backoff on 5xx errors
+- **OpenAI Drop-In** — `arc.openai()` returns a standard OpenAI client pointed at ArcRouter
+- **Full TypeScript** — complete types for all responses and options
 
-## API Reference
+## API
 
-### `ConsensusClient`
+### `arc.chat(prompt, options?)`
 
-#### Constructor Options
+Route to the best single model. Fast, cheap, smart.
 
 ```typescript
-interface ConsensusClientOptions {
-  apiKey?: string;          // API key for authentication
-  account?: Account;        // Viem account for x402 signatures
-  baseURL?: string;         // API base URL (default: https://consensus-api.workers.dev)
+const res = await arc.chat('Explain quantum entanglement', {
+  budget: 'premium',           // 'free' | 'economy' | 'auto' | 'premium'
+  agentStep: 'reasoning',      // hints complexity to the router
+  maxCost: 0.01,               // USD cap per request
+  excludeModels: ['deepseek/deepseek-r1'],
+  sessionId: 'session-123',    // model pinning across turns
+});
+
+console.log(res.content);       // The answer
+console.log(res.routing.model); // Which model was chosen
+console.log(res.routing.topic); // Detected topic (e.g. "science/physics")
+```
+
+### `arc.council(prompt, options?)`
+
+Multi-model consensus. 3-7 models vote, majority wins.
+
+```typescript
+const res = await arc.council('Is P = NP?');
+console.log(res.content);      // Consensus answer
+console.log(res.confidence);   // 0-1
+console.log(res.votes);        // Individual model answers
+console.log(res.synthesized);  // true if chairman had to resolve disagreement
+```
+
+### `arc.stream(prompt, options?)`
+
+Async generator for streaming responses.
+
+```typescript
+for await (const chunk of arc.stream('Write a story about...')) {
+  process.stdout.write(chunk);
 }
 ```
 
-#### Methods
+### `arc.models(options?)`
 
-##### `chat.completions.create()`
-
-Create a chat completion with consensus routing.
+List available models with benchmark scores and pricing.
 
 ```typescript
-interface ConsensusRequest {
-  messages: Array<{ role: 'system' | 'user' | 'assistant', content: string }>;
-  budget?: 'low' | 'medium' | 'high';  // Cost/quality trade-off
-  reliability?: 'fast' | 'standard' | 'strict';  // Speed/accuracy trade-off
-}
+const models = await arc.models({ topic: 'code', budget: 'auto' });
+models.forEach(m => console.log(`${m.name}: $${m.inputPricePer1M}/1M tokens`));
 ```
 
-**Response:**
+### `arc.usage(options?)`
+
+Get your API key's usage history.
 
 ```typescript
-interface ConsensusResponse {
-  id: string;
-  object: 'chat.completion';
-  created: number;
-  model: string;
-  choices: Array<{
-    index: number;
-    message: { role: 'assistant', content: string };
-    finish_reason: string;
-  }>;
-  consensus: {
-    confidence: number;  // 0-1, how confident the consensus is
-    tier: string;        // Complexity tier used
-    votes: Array<{
-      model: string;
-      answer: string;
-      agrees: boolean;
-    }>;
-  };
-}
+const stats = await arc.usage({ days: 30 });
+console.log(`${stats.totalRequests} requests, $${stats.totalCostUsd} total`);
 ```
 
-## x402 Payment Flow
+### `arc.workflow(options)`
 
-The SDK automatically handles x402 payment signatures:
-
-1. If no API key is provided, the client requests a payment quote
-2. Signs an EIP-712 message with your account
-3. Includes the signature in subsequent requests
-4. No credit card or manual payment required
+Create a multi-step workflow with shared budget tracking.
 
 ```typescript
+const wf = arc.workflow({
+  sessionId: 'agent-run-42',
+  totalBudget: 5.00,  // USD
+});
+
+const plan = await wf.chat('Plan the implementation', { agentStep: 'planning' });
+const code = await wf.chat('Write the code', { agentStep: 'code-generation' });
+const review = await wf.chat('Review for bugs', { agentStep: 'verification' });
+
+const usage = await wf.getUsage();
+console.log(`Spent $${usage.total_spent_usd} of $${usage.total_budget_usd}`);
+```
+
+### `arc.openai()`
+
+Drop-in OpenAI client — zero-code migration.
+
+```typescript
+const client = arc.openai();
+const completion = await client.chat.completions.create({
+  model: 'gpt',  // alias — ArcRouter resolves to best GPT model
+  messages: [{ role: 'user', content: 'Hello' }],
+});
+```
+
+## Agent Step Headers
+
+When building agent frameworks, use `agentStep` to tell the router what kind of work each step does:
+
+| Step | Maps to | Use for |
+|------|---------|---------|
+| `simple-action` | SIMPLE | Formatting, extraction, simple lookups |
+| `code-generation` | COMPLEX + code topic | Writing code |
+| `reasoning` | REASONING | Analysis, planning, complex decisions |
+| `verification` | Council mode | Cross-checking, validation |
+
+### x402 Micropayments
+
+Pay per request with USDC on Base — no API key needed. The SDK automatically handles 402 responses, signs an on-chain payment authorization, and retries.
+
+```bash
+npm install arcrouter viem @x402/core @x402/evm
+```
+
+```typescript
+import { ArcRouter } from 'arcrouter';
 import { privateKeyToAccount } from 'viem/accounts';
 
-const account = privateKeyToAccount(process.env.PRIVATE_KEY);
-const client = new ConsensusClient({ account });
-
-// Automatically handles x402 signature
-const response = await client.chat.completions.create({
-  messages: [{ role: 'user', content: 'Hello world' }],
-});
-```
-
-## Examples
-
-### With API Key
-
-```typescript
-const client = new ConsensusClient({
-  apiKey: process.env.CONSENSUS_API_KEY,
-  baseURL: 'https://your-worker.workers.dev',
-});
-```
-
-### With x402 (Crypto Payments)
-
-```typescript
-import { privateKeyToAccount } from 'viem/accounts';
-
-const account = privateKeyToAccount(process.env.PRIVATE_KEY);
-const client = new ConsensusClient({ account });
-```
-
-### Budget Control
-
-```typescript
-// Low budget: Use free/cheap models
-const cheapResponse = await client.chat.completions.create({
-  messages: [{ role: 'user', content: 'Simple question' }],
-  budget: 'low',
+const arc = new ArcRouter({
+  wallet: privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`),
+  budget: 'auto', // x402 pricing: $0.001 simple, $0.002 medium, $0.005 complex
 });
 
-// High budget: Use premium models with Chairman
-const premiumResponse = await client.chat.completions.create({
-  messages: [{ role: 'user', content: 'Complex legal analysis' }],
-  budget: 'high',
-  reliability: 'strict',
+const res = await arc.chat('Explain quantum computing');
+// Payment signed and sent automatically — no API key required
+```
+
+Pricing varies by prompt complexity:
+| Complexity | Price |
+|-----------|-------|
+| SIMPLE | $0.001 |
+| MEDIUM | $0.002 |
+| COMPLEX | $0.005 |
+| REASONING | $0.008 |
+
+### Auto Retry
+
+The SDK automatically retries on 5xx errors with exponential backoff (default: 2 retries).
+
+```typescript
+const arc = new ArcRouter({
+  apiKey: 'sk_...',
+  maxRetries: 3, // default: 2
 });
 ```
 
 ## License
 
-ISC
+MIT
 
-## Support
+## Links
 
-- **Documentation**: https://docs.consensuscloud.ai
-- **GitHub**: https://github.com/consensuscloud/sdk
-- **Issues**: https://github.com/consensuscloud/sdk/issues
+- **Docs:** https://arcrouter.com/docs
+- **API:** https://api.arcrouter.com
+- **GitHub:** https://github.com/ArcRouterAI/arcrouter-sdk

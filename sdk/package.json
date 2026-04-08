@@ -1,13 +1,21 @@
 {
-  "name": "@consensus-cloud/sdk",
-  "version": "1.0.0",
+  "name": "arcrouter",
+  "version": "0.1.0",
   "type": "module",
-  "description": "Official TypeScript SDK for ConsensusCloud - Multi-model consensus routing with x402 payment protocol",
-  "main": "./dist/index.js",
-  "module": "./dist/index.mjs",
+  "description": "Official TypeScript SDK for ArcRouter — intelligent LLM routing with multi-model consensus",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts",
@@ -15,21 +23,44 @@
     "lint": "tsc"
   },
   "keywords": [
-    "consensus",
-    "ai",
-    "router",
+    "arcrouter",
     "llm",
+    "routing",
+    "ai",
+    "openai",
+    "council",
+    "consensus",
     "x402"
   ],
-  "author": "ConsensusCloud",
-  "license": "ISC",
+  "author": "ArcRouter",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ArcRouterAI/arcrouter-sdk"
+  },
+  "homepage": "https://arcrouter.com",
   "dependencies": {
-    "openai": "^4.76.0",
-    "viem": "^2.38.6"
+    "openai": "^4.76.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"
+  },
+  "peerDependencies": {
+    "viem": ">=2.0.0",
+    "@x402/core": ">=2.0.0",
+    "@x402/evm": ">=2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "viem": {
+      "optional": true
+    },
+    "@x402/core": {
+      "optional": true
+    },
+    "@x402/evm": {
+      "optional": true
+    }
   }
 }
