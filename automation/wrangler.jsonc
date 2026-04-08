@@ -1,0 +1,45 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "arcrouter-content-pipeline",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-02-08",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // Shared KV namespace with the main API — same data store
+  "kv_namespaces": [
+    {
+      "binding": "CONSENSUS_CACHE",
+      "id": "91b5ba295f774396812f197398b2921f",
+      "preview_id": "91b5ba295f774396812f197398b2921f"
+    }
+  ],
+
+  // Crons:
+  //   Daily 6am UTC    → curator + social post generation + review email
+  //   Weekly Monday 8am UTC → article generation + review email
+  "triggers": {
+    "crons": ["0 6 * * *", "0 8 * * 1"]
+  },
+
+  "vars": {
+    "ENVIRONMENT": "production",
+    // Email address to send review notifications to
+    "REVIEW_EMAIL": "your@email.com",
+    // Base URL of this worker (for review links in emails)
+    "WORKER_URL": "https://arcrouter-content-pipeline.your-account.workers.dev"
+  }
+
+  // Secrets set via `wrangler secret put`:
+  // REVIEW_TOKEN        — secret for protecting the review UI (any random string)
+  // ARCROUTER_API_KEY   — ArcRouter API key for content generation (dogfood)
+  // RESEND_API_KEY      — Resend.com API key for email notifications
+  // TWITTER_CLIENT_ID   — Twitter API v2 OAuth 2.0 client ID
+  // TWITTER_CLIENT_SECRET — Twitter API v2 OAuth 2.0 client secret
+  // TWITTER_ACCESS_TOKEN  — Twitter user access token (for posting as your account)
+  // TWITTER_ACCESS_SECRET — Twitter user access token secret
+  // REDDIT_CLIENT_ID    — Reddit app client ID
+  // REDDIT_CLIENT_SECRET — Reddit app client secret
+  // REDDIT_REFRESH_TOKEN — Reddit OAuth refresh token
+  // REDDIT_USERNAME     — Reddit account username
+  // DEVTO_API_KEY       — Dev.to API key (from dev.to/settings/extensions)
+}
