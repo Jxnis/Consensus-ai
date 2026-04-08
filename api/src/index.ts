@@ -181,6 +181,7 @@ app.use("/v1/*", async (c, next) => {
       }
 
       c.set("userId" as never, keyData.userId as never);
+      c.set("keyHash" as never, keyHash as never);
       c.set("stripeSubscriptionId" as never, keyData.stripeSubscriptionId as never);
       c.set("subscriptionItemId" as never, keyData.subscriptionItemId as never);
       return await next();
@@ -394,7 +395,20 @@ app.post("/v1/chat/completions", async (c) => {
   const requestId = `cons-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 
   // Use pre-parsed body if available (avoids double-parse)
-  const body = (c.get("parsedBody" as never) as Record<string, unknown>) || await c.req.json();
+  let body = (c.get("parsedBody" as never) as Record<string, unknown>) || await c.req.json();
+
+  // Prompt compression (lossless, applied when messages total > 5000 chars)
+  let compressionStats: import("./compression/index").CompressionStats | null = null;
+  if (Array.isArray(body.messages)) {
+    const { compressMessages } = await import("./compression/index");
+    const { messages: compressedMessages, stats } = compressMessages(body.messages as any[]);
+    if (stats.saved_chars > 0) {
+      body = { ...body, messages: compressedMessages };
+      compressionStats = stats;
+      console.log(`[Compression] Saved ${stats.saved_chars} chars (${(100 - stats.ratio * 100).toFixed(1)}%) via [${stats.layers_applied.join(",")}]`);
+    }
+  }
+
   const messages = body.messages as Array<{role: string; content: string}> | undefined;
   const prompt = messages?.[messages.length - 1]?.content || "";
 
@@ -425,6 +439,12 @@ app.post("/v1/chat/completions", async (c) => {
   }
 
   const authTier = (c.get("authTier" as never) as string) || "free";
+
+  // "free" model alias → force free budget tier (must happen before budget computation)
+  if (typeof body.model === "string" && body.model === "__alias:free") {
+    (body as any).budget = "free";
+  }
+
   const rawBudget = typeof body.budget === "string" ? body.budget : undefined;
   const routingBudget = normalizeRoutingBudget(rawBudget, authTier);
   const councilBudget = routingBudgetToCouncilBudget(routingBudget);
@@ -444,10 +464,6 @@ app.post("/v1/chat/completions", async (c) => {
   const forcedModelId = typeof body.model === "string" && !body.model.startsWith("__alias:")
     ? body.model
     : undefined;
-  // "free" model alias → force free budget tier regardless of auth
-  if (typeof body.model === "string" && body.model === "__alias:free") {
-    (body as any).budget = "free";
-  }
 
   // === SPRINT 2: X-Agent-Step header ===
   const agentStep = parseAgentStep(c.req.header("X-Agent-Step"));
@@ -919,12 +935,30 @@ app.post("/v1/chat/completions", async (c) => {
                   });
                 };
 
+                // Per-key usage tracking for stream requests
+                const streamKeyHash = c.get("keyHash" as never) as string | undefined;
+                const trackStreamUsage = async () => {
+                  if (!streamKeyHash || !c.env.CONSENSUS_CACHE) return;
+                  try {
+                    const usageKey = `usage:${streamKeyHash}:${dayKey}`;
+                    const existing = await c.env.CONSENSUS_CACHE.get(usageKey, { type: "json" }) as { requests: number; cost_usd: number } | null;
+                    const spendUsd = tokenEstimate > 0
+                      ? ((tokenEstimate / 1_000_000) * model.input_price) + (500 / 1_000_000 * model.output_price)
+                      : (complexity.tier === "SIMPLE" ? 0.001 : complexity.tier === "REASONING" ? 0.008 : 0.002);
+                    await c.env.CONSENSUS_CACHE.put(usageKey, JSON.stringify({
+                      requests: (existing?.requests ?? 0) + 1,
+                      cost_usd: parseFloat(((existing?.cost_usd ?? 0) + spendUsd).toFixed(6)),
+                    }), { expirationTtl: 60 * 60 * 24 * 90 });
+                  } catch { /* non-critical */ }
+                };
+
                 c.executionCtx.waitUntil(Promise.all([
                   circuitBreaker.recordSuccess(model.id),
                   telemetry.record(model.id, totalLatency, true),
                   addMetricNumber(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_sum_ms`, totalLatency),
                   incrementMetric(c.env.CONSENSUS_CACHE, `${metricsPrefix}:latency_total_count`),
                   logSuccess(),
+                  trackStreamUsage(),
                 ]));
               } catch (streamErr) {
                 console.error('[Smart Router] Stream error:', streamErr);
@@ -1018,6 +1052,26 @@ app.post("/v1/chat/completions", async (c) => {
             );
           }
 
+          // Per-key usage tracking (async, don't block response)
+          const keyHashForUsage = c.get("keyHash" as never) as string | undefined;
+          if (keyHashForUsage && c.env.CONSENSUS_CACHE) {
+            const usageKey = `usage:${keyHashForUsage}:${dayKey}`;
+            c.executionCtx.waitUntil(
+              (async () => {
+                try {
+                  const existing = await c.env.CONSENSUS_CACHE.get(usageKey, { type: "json" }) as { requests: number; cost_usd: number } | null;
+                  const spendUsd = tokenEstimate > 0
+                    ? ((tokenEstimate / 1_000_000) * model.input_price) + (500 / 1_000_000 * model.output_price)
+                    : (complexity.tier === "SIMPLE" ? 0.001 : complexity.tier === "REASONING" ? 0.008 : 0.002);
+                  await c.env.CONSENSUS_CACHE.put(usageKey, JSON.stringify({
+                    requests: (existing?.requests ?? 0) + 1,
+                    cost_usd: parseFloat(((existing?.cost_usd ?? 0) + spendUsd).toFixed(6)),
+                  }), { expirationTtl: 60 * 60 * 24 * 90 }); // 90-day TTL
+                } catch { /* non-critical */ }
+              })()
+            );
+          }
+
           // Workflow budget: record spend (async, don't block response)
           if (workflowSessionId && c.env.CONSENSUS_CACHE) {
             const tracker = new WorkflowTracker(c.env.CONSENSUS_CACHE);
@@ -1071,6 +1125,10 @@ app.post("/v1/chat/completions", async (c) => {
             'X-ArcRouter-Topic': topic,
             'X-ArcRouter-Complexity': complexity.tier,
           };
+          if (compressionStats && compressionStats.saved_chars > 0) {
+            responseHeaders['X-Compression-Ratio'] = compressionStats.ratio.toString();
+            responseHeaders['X-Compression-Saved-Chars'] = compressionStats.saved_chars.toString();
+          }
           if (workflowBudgetRemaining !== null) {
             responseHeaders['X-ArcRouter-Budget-Remaining'] = workflowBudgetRemaining.toString();
           }
@@ -1488,6 +1546,55 @@ app.get("/v1/models/scores", async (c) => {
       message: err instanceof Error ? err.message : String(err),
     }, 500);
   }
+});
+
+// Usage stats for authenticated API key
+app.get("/v1/usage", async (c) => {
+  const authTier = c.get("authTier" as never) as string | undefined;
+  const keyHash = c.get("keyHash" as never) as string | undefined;
+
+  if (!authTier || authTier === "free") {
+    return c.json({ error: "API key required for usage stats" }, 401);
+  }
+  if (!keyHash) {
+    return c.json({ error: "Could not identify API key" }, 400);
+  }
+
+  const daysParam = parseInt(c.req.query("days") || "30");
+  const days = Math.min(Math.max(daysParam, 1), 90);
+
+  const dailyStats: Array<{ date: string; requests: number; cost_usd: number }> = [];
+  const today = new Date();
+
+  const keys = Array.from({ length: days }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    return d.toISOString().slice(0, 10);
+  });
+
+  // Parallel KV reads for all days
+  const results = await Promise.all(
+    keys.map(date =>
+      c.env.CONSENSUS_CACHE.get(`usage:${keyHash}:${date}`, { type: "json" })
+        .then(data => ({ date, ...(data as { requests: number; cost_usd: number } | null ?? { requests: 0, cost_usd: 0 }) }))
+        .catch(() => ({ date, requests: 0, cost_usd: 0 }))
+    )
+  );
+
+  // Sort ascending by date
+  results.sort((a, b) => a.date.localeCompare(b.date));
+  dailyStats.push(...results);
+
+  const totalRequests = dailyStats.reduce((s, d) => s + d.requests, 0);
+  const totalCostUsd = parseFloat(dailyStats.reduce((s, d) => s + d.cost_usd, 0).toFixed(6));
+
+  return c.json({
+    tier: authTier,
+    period: { days, from: keys[keys.length - 1], to: keys[0] },
+    total_requests: totalRequests,
+    total_cost_usd: totalCostUsd,
+    daily: dailyStats,
+  });
 });
 
 // Workflow: Get usage stats for a session (no auth required — session_id is the secret)
