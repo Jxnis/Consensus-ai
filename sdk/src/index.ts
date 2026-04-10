@@ -376,13 +376,14 @@ export class ArcRouter {
 
   /**
    * Handle a 402 response by signing a payment and retrying.
-   * Returns the retry Response, or throws if payment isn't possible.
+   * Returns { res, paidInit } so callers can use paidInit for subsequent retries —
+   * x402 payment headers must be preserved on 5xx retries to avoid re-triggering 402.
    */
   private async handleX402(
     res: Response,
     url: string,
     init: RequestInit,
-  ): Promise<Response> {
+  ): Promise<{ res: Response; paidInit: RequestInit }> {
     const x402Client = await this.getX402Client();
     if (!x402Client) {
       throw new Error(
@@ -405,8 +406,8 @@ export class ArcRouter {
     // Encode as headers
     const paymentHeaders = x402Client.encodePaymentSignatureHeader(paymentPayload);
 
-    // Retry with payment headers
-    const retryInit: RequestInit = {
+    // Build paid init — must be used for all subsequent retries
+    const paidInit: RequestInit = {
       ...init,
       headers: {
         ...(init.headers as Record<string, string>),
@@ -414,7 +415,7 @@ export class ArcRouter {
       },
     };
 
-    return fetch(url, retryInit);
+    return { res: await fetch(url, paidInit), paidInit };
   }
 
   /**
@@ -426,16 +427,21 @@ export class ArcRouter {
   ): Promise<Response> {
     let res = await fetch(url, init);
 
-    // Handle x402 payment (one attempt — no retry loop for payments)
+    // Handle x402 payment (one attempt).
+    // Use paidInit for all subsequent 5xx retries — payment headers must be preserved
+    // so the server doesn't issue a second 402 after the payment was already signed.
+    let effectiveInit = init;
     if (res.status === 402 && this.wallet) {
-      res = await this.handleX402(res, url, init);
+      const { res: paidRes, paidInit } = await this.handleX402(res, url, init);
+      res = paidRes;
+      effectiveInit = paidInit; // carry payment headers into retry loop
     }
 
     // Retry on 5xx with exponential backoff
     if (res.status >= 500 && this.maxRetries > 0) {
       for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
         await sleep(Math.min(1000 * 2 ** (attempt - 1), 8000));
-        res = await fetch(url, init);
+        res = await fetch(url, effectiveInit);
         if (res.status < 500) break;
       }
     }
