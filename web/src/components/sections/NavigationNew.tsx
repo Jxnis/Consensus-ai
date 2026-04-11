@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import ArcLogo from "../ArcLogo";
 import { useEffect, useState } from "react";
 
-const navLinks = [
+const navLinks: { label: string; href: string; external?: boolean }[] = [
   { label: "DOCS", href: "/docs" },
   { label: "RANKINGS", href: "/rankings" },
   { label: "RESEARCH", href: "/research" },
@@ -125,7 +125,8 @@ const NavigationNew = () => {
             <a
               key={link.label}
               href={link.href}
-              {...('external' in link && link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+              target={link.external ? "_blank" : undefined}
+              rel={link.external ? "noopener noreferrer" : undefined}
               className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground hover:text-foreground transition-all duration-300 relative group"
             >
               {link.label}

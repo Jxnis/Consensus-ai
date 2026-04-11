@@ -602,17 +602,21 @@ export class ArcRouter {
       throw new Error(`ArcRouter models error ${res.status}`);
     }
 
-    const data = await res.json() as Array<Record<string, unknown>>;
-    return (Array.isArray(data) ? data : []).map(m => ({
-      id: String(m.id ?? ""),
-      name: String(m.name ?? ""),
-      provider: String(m.provider ?? ""),
-      inputPricePer1M: Number(m.input_price ?? 0),
-      outputPricePer1M: Number(m.output_price ?? 0),
-      contextLength: Number(m.context_length ?? 0),
-      qualityScore: typeof m.quality_score === "number" ? m.quality_score : undefined,
-      valueScore: typeof m.value_score === "number" ? m.value_score : undefined,
-    }));
+    const data = await res.json() as Record<string, unknown> | Array<Record<string, unknown>>;
+    const list = Array.isArray(data) ? data : (data.models as Array<Record<string, unknown>> ?? []);
+    return list.map(m => {
+      const pricing = (m.pricing ?? {}) as Record<string, unknown>;
+      return {
+        id: String(m.id ?? ""),
+        name: String(m.name ?? ""),
+        provider: String(m.provider ?? ""),
+        inputPricePer1M: Number(m.input_price ?? pricing.input_per_1m ?? 0),
+        outputPricePer1M: Number(m.output_price ?? pricing.output_per_1m ?? 0),
+        contextLength: Number(m.context_length ?? 0),
+        qualityScore: typeof m.quality_score === "number" ? m.quality_score : undefined,
+        valueScore: typeof m.value_score === "number" ? m.value_score : undefined,
+      };
+    });
   }
 
   /**
