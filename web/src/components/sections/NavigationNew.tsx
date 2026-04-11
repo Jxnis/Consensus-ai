@@ -10,6 +10,7 @@ const navLinks = [
   { label: "RESEARCH", href: "/research" },
   { label: "PRICING", href: "#pricing" },
   { label: "PLAYGROUND", href: "#playground" },
+  { label: "GITHUB", href: "https://github.com/ArcRouterAI", external: true },
 ];
 
 function AnimatedTitle({
@@ -124,6 +125,7 @@ const NavigationNew = () => {
             <a
               key={link.label}
               href={link.href}
+              {...('external' in link && link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
               className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground hover:text-foreground transition-all duration-300 relative group"
             >
               {link.label}

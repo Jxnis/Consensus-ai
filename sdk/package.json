@@ -1,5 +1,5 @@
 {
-  "name": "arcrouter",
+  "name": "@arcrouter/sdk",
   "version": "0.1.0",
   "type": "module",
   "description": "Official TypeScript SDK for ArcRouter — intelligent LLM routing with multi-model consensus",
