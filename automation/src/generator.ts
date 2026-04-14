@@ -36,7 +36,7 @@ async function callArcRouter(
       ],
       stream: false,
     }),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(60000), // 60s — council mode needs time for multi-model consensus
   });
 
   if (!response.ok) {
@@ -95,14 +95,21 @@ function buildThreadPrompt(topic: Topic): string {
 Write a 7-tweet thread about: "${topic.title}"
 Source: ${topic.url}
 
+CRITICAL FORMAT — each tweet must start with "N/" on its own line. Example:
+
+1/ Hook tweet goes here — max 280 chars
+2/ Second tweet with data or insight
+3/ Third tweet continues the story
+
 Rules:
-- Each tweet starts with its number and a slash: "1/ ... 2/ ..."
-- Each tweet must be ≤280 characters (COUNT CAREFULLY)
+- EXACTLY 7 tweets, numbered 1/ through 7/
+- Each tweet MUST be ≤280 characters (this is a hard limit, count carefully)
 - Tweet 1: Strong hook — surprising stat, counterintuitive claim, or bold question
 - Tweets 2-6: Technical depth, real data, code snippet if relevant, no fluff
-- Tweet 7: Practical takeaway + one subtle mention of ArcRouter ONLY if directly relevant to the topic (routing, benchmarks, LLM costs)
+- Tweet 7: Practical takeaway. Mention ArcRouter ONLY if the topic is about LLM routing/costs
 - Tone: developer helping developers — no hype, no corporate speak
-- Write exactly 7 numbered tweets. No preamble, no explanation.`;
+- Output ONLY the numbered tweets. No intro, no explanation, no commentary.
+- DO NOT write paragraphs. Each tweet is a short, standalone statement.`;
 }
 
 function buildStandalonePrompt(topic: Topic): string {
@@ -121,18 +128,18 @@ Rules:
 }
 
 function buildRedditPrompt(topic: Topic): string {
-  return `You are a helpful developer participating in r/LocalLLaMA or r/MachineLearning.
+  return `You are a developer on r/LocalLLaMA or r/MachineLearning sharing a quick insight.
 
-Write a helpful Reddit comment responding to this discussion: "${topic.title}"
+Topic: "${topic.title}"
 Source: ${topic.url}
 
-Rules:
-- 150–300 words
-- Lead with genuine value: explain something, share data, correct a misconception
-- Mention ArcRouter ONLY if someone directly asks about routing solutions or LLM cost tools
-- Tone: casual, knowledgeable, community member — not a product pitch
-- No bullet-list spam — write in natural paragraphs
-- Output only the comment text, nothing else`;
+Write a SHORT Reddit comment (80–150 words, 2-3 paragraphs max):
+- Open with a concrete observation, data point, or personal experience
+- Add one technical insight or practical tip
+- Keep it conversational — you're a peer, not a professor
+- Do NOT mention ArcRouter unless the topic is specifically about LLM routing
+- No bullet lists. No "In summary..." or "In conclusion..." phrases.
+- Output ONLY the comment text, nothing else.`;
 }
 
 // ─── Main Generator ───────────────────────────────────────────────────────────
@@ -255,7 +262,7 @@ Powered by ArcRouter council mode 🚀`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "ArcRouter Bot <bot@arcrouter.com>",
+        from: "ArcRouter Bot <onboarding@resend.dev>", // Switch to bot@arcrouter.com after adding domain on resend.com/domains
         to: [env.REVIEW_EMAIL],
         subject: `📝 ${posts.length} post(s) ready for review — ArcRouter Content Pipeline`,
         text: body,
