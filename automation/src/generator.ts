@@ -142,17 +142,79 @@ Write a SHORT Reddit comment (80–150 words, 2-3 paragraphs max):
 - Output ONLY the comment text, nothing else.`;
 }
 
+// ─── Tweet Thread Retry ──────────────────────────────────────────────────────
+
+const THREAD_MIN_TWEETS = 5;
+const THREAD_MAX_TWEETS = 9;
+const THREAD_TARGET = 7;
+
+async function generateThreadWithRetry(
+  env: Env,
+  topic: Topic,
+  maxAttempts = 2
+): Promise<string[]> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const prompt = attempt === 1
+      ? buildThreadPrompt(topic)
+      : buildThreadPrompt(topic) + `\n\nIMPORTANT: Your last attempt had the wrong number of tweets. You MUST output EXACTLY ${THREAD_TARGET} tweets. Count them carefully.`;
+
+    const raw = await callArcRouter(env, prompt, topic.title, "council");
+    const thread = parseTweetThread(raw);
+
+    if (thread.length >= THREAD_MIN_TWEETS && thread.length <= THREAD_MAX_TWEETS) {
+      return thread;
+    }
+
+    console.warn(
+      `[Generator] Thread attempt ${attempt}: got ${thread.length} tweets (expected ${THREAD_MIN_TWEETS}-${THREAD_MAX_TWEETS})${
+        attempt < maxAttempts ? ", retrying..." : ", using as-is"
+      }`
+    );
+
+    // On last attempt, use whatever we got (if any)
+    if (attempt === maxAttempts && thread.length > 0) {
+      return thread;
+    }
+  }
+
+  return [];
+}
+
+// ─── Dedup Guard ─────────────────────────────────────────────────────────────
+
+/**
+ * Check if we already generated posts today to prevent duplicates
+ * when the cron or manual trigger runs twice on the same day.
+ */
+async function hasGeneratedToday(kv: KVNamespace): Promise<boolean> {
+  const today = new Date().toISOString().slice(0, 10);
+  const marker = await kv.get(`generator:ran:${today}`);
+  return marker !== null;
+}
+
+async function markGeneratedToday(kv: KVNamespace): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  await kv.put(`generator:ran:${today}`, "1", { expirationTtl: 60 * 60 * 36 }); // 36h TTL
+}
+
 // ─── Main Generator ───────────────────────────────────────────────────────────
 
 export interface GenerateResult {
   posts: GeneratedPost[];
   topics_used: number;
   errors: string[];
+  skipped_dedup?: boolean;
 }
 
-export async function generatePosts(env: Env, topics: Topic[]): Promise<GenerateResult> {
+export async function generatePosts(env: Env, topics: Topic[], force = false): Promise<GenerateResult> {
   const posts: GeneratedPost[] = [];
   const errors: string[] = [];
+
+  // Dedup guard: skip if already generated today (unless forced)
+  if (!force && await hasGeneratedToday(env.CONSENSUS_CACHE)) {
+    console.log("[Generator] Already generated posts today — skipping (use force=true to override)");
+    return { posts: [], topics_used: 0, errors: [], skipped_dedup: true };
+  }
 
   // Generate content for top 2 topics (avoid flooding KV + API costs)
   const selectedTopics = topics.slice(0, 2);
@@ -160,25 +222,24 @@ export async function generatePosts(env: Env, topics: Topic[]): Promise<Generate
   for (const topic of selectedTopics) {
     console.log(`[Generator] Generating content for: "${topic.title}"`);
 
-    // Run thread + standalone in parallel; reddit runs last (lower priority)
     let thread: string[] = [];
     let standalone = "";
     let reddit = "";
 
     try {
-      // Thread uses council mode for higher quality (multiple models agree)
-      const [threadRaw, standaloneRaw] = await Promise.all([
-        callArcRouter(env, buildThreadPrompt(topic), topic.title, "council"),
+      // Thread uses council mode with retry; standalone runs in parallel
+      const [threadResult, standaloneRaw] = await Promise.all([
+        generateThreadWithRetry(env, topic),
         callArcRouter(env, buildStandalonePrompt(topic), topic.title, "default"),
       ]);
 
-      thread = parseTweetThread(threadRaw);
+      thread = threadResult;
       standalone = validateStandaloneTweet(standaloneRaw);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[Generator] Failed thread/standalone for "${topic.title}":`, msg);
       errors.push(`Thread/standalone for "${topic.title}": ${msg}`);
-      continue; // Skip this topic entirely rather than storing partial content
+      continue;
     }
 
     try {
@@ -214,6 +275,11 @@ export async function generatePosts(env: Env, topics: Topic[]): Promise<Generate
 
     posts.push(post);
     console.log(`[Generator] Stored post ${post.id} (${thread.length} tweets)`);
+  }
+
+  // Mark today as generated (only if we actually produced something)
+  if (posts.length > 0) {
+    await markGeneratedToday(env.CONSENSUS_CACHE);
   }
 
   return { posts, topics_used: selectedTopics.length, errors };
@@ -262,7 +328,7 @@ Powered by ArcRouter council mode 🚀`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "ArcRouter Bot <onboarding@resend.dev>", // Switch to bot@arcrouter.com after adding domain on resend.com/domains
+        from: "ArcRouter Bot <bot@arcrouter.com>",
         to: [env.REVIEW_EMAIL],
         subject: `📝 ${posts.length} post(s) ready for review — ArcRouter Content Pipeline`,
         text: body,

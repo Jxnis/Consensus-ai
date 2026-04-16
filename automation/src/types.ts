@@ -25,7 +25,7 @@ export interface Topic {
   id: string;
   title: string;
   url: string;
-  source: "hn" | "reddit" | "arxiv";
+  source: "hn" | "reddit" | "arxiv" | "polymarket" | "techcrunch" | "theverge" | "axios" | "coindesk" | "openai_blog" | "hf_papers";
   score: number;          // source score (upvotes, etc)
   relevance: number;      // 0.0–1.0 relevance to AI/LLM/routing
   fetched_at: string;     // ISO timestamp

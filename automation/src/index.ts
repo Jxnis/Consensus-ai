@@ -18,7 +18,7 @@ import { Hono } from "hono";
 import { Env } from "./types.js";
 import { curateTopics, getTodaysTopics } from "./curator.js";
 import { generatePosts, sendReviewEmail } from "./generator.js";
-import { handleReviewGet, handleReviewAction } from "./review.js";
+import { handleReviewGet, handleReviewAction, handleArticleReviewAction } from "./review.js";
 import { scheduleApprovedPosts, postRedditDraft } from "./scheduler.js";
 import { generateWeeklyArticle, sendArticleReviewEmail, getPendingArticles } from "./article-generator.js";
 import { publishArticle } from "./devto-publisher.js";
@@ -48,6 +48,7 @@ app.get("/", (c) => {
 
 app.get("/review", (c) => handleReviewGet(c.req.raw, c.env));
 app.post("/review/action", (c) => handleReviewAction(c.req.raw, c.env));
+app.post("/review/article-action", (c) => handleArticleReviewAction(c.req.raw, c.env));
 
 // ─── Manual Triggers ──────────────────────────────────────────────────────────
 
@@ -76,6 +77,8 @@ app.get("/trigger/generate", async (c) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
+  const force = c.req.query("force") === "true";
+
   try {
     const topics = await getTodaysTopics(c.env.CONSENSUS_CACHE);
     if (!topics || topics.length === 0) {
@@ -85,7 +88,7 @@ app.get("/trigger/generate", async (c) => {
       }, 404);
     }
 
-    const result = await generatePosts(c.env, topics);
+    const result = await generatePosts(c.env, topics, force);
 
     // Send review email (non-blocking)
     if (result.posts.length > 0) {
