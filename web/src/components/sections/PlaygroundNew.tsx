@@ -68,7 +68,7 @@ const PlaygroundNew = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [{ role: 'user', content: prompt }],
-          budget: 'auto',
+          budget: 'free',
         }),
       });
 
@@ -266,7 +266,7 @@ const PlaygroundNew = () => {
           </p>
         </motion.div>
 
-        {/* Input */}
+        {/* Prompt Input */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -278,7 +278,7 @@ const PlaygroundNew = () => {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleRun()}
-            placeholder={mode === "route" ? "Ask anything — routes to the best model automatically" : "Ask anything — free tier, no signup needed"}
+            placeholder={mode === "route" ? "Ask anything — routes to the best model automatically" : "Ask anything — council verifies across models"}
             disabled={phase !== 'idle'}
             className="flex-1 font-mono text-[12px] bg-transparent border border-border px-6 py-4 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground transition-colors duration-500 disabled:opacity-50"
           />

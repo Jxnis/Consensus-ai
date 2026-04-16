@@ -70,6 +70,14 @@ export async function POST(req: NextRequest) {
     typeof body === 'object' &&
     (body as Record<string, unknown>).stream === true;
 
+  // ── Playground guardrails ──
+  // Force free budget (free models only, $0 cost) + cap max_tokens.
+  // Premium models via wallet connect (x402) planned for Sprint 5.
+  const sanitizedBody = body as Record<string, unknown>;
+  sanitizedBody.budget = 'free';
+  const requestedMaxTokens = typeof sanitizedBody.max_tokens === 'number' ? sanitizedBody.max_tokens : 512;
+  sanitizedBody.max_tokens = Math.min(requestedMaxTokens, 512);
+
   try {
     // 20s timeout — generous for multi-model consensus
     const controller = new AbortController();
@@ -82,7 +90,7 @@ export async function POST(req: NextRequest) {
         'Authorization': `Bearer ${apiKey}`,
         'X-Source': 'arcrouter-playground',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(sanitizedBody),
       signal: controller.signal,
     });
 
@@ -124,7 +132,7 @@ export async function POST(req: NextRequest) {
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'AbortError') {
       return NextResponse.json(
-        { error: 'Request timed out. The council took too long to respond.' },
+        { error: 'Request timed out. Please try again.' },
         { status: 504 }
       );
     }
