@@ -79,4 +79,7 @@ export interface CloudflareBindings {
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
+  // MPP (Machine Payments Protocol) integration (optional)
+  MPP_SECRET_KEY?: string;
+  MPP_TEMPO_RECIPIENT?: string;
 }

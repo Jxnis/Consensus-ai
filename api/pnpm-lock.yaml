@@ -16,10 +16,13 @@ importers:
         version: 2.3.1
       '@x402/hono':
         specifier: ^2.3.0
-        version: 2.3.0(ethers@6.16.0)(hono@4.11.9)
+        version: 2.3.0(ethers@6.16.0)(hono@4.12.14)
       hono:
-        specifier: ^4.11.9
-        version: 4.11.9
+        specifier: ^4.12.14
+        version: 4.12.14
+      mppx:
+        specifier: ^0.6.3
+        version: 0.6.3(hono@4.12.14)(viem@2.48.4(zod@4.3.6))
       openai:
         specifier: ^4.76.0
         version: 4.104.0(ws@8.18.3)(zod@4.3.6)
@@ -27,8 +30,8 @@ importers:
         specifier: ^20.4.1
         version: 20.4.1(@types/node@22.19.10)
       viem:
-        specifier: ^2.38.6
-        version: 2.45.2(zod@4.3.6)
+        specifier: ^2.48.4
+        version: 2.48.4(zod@4.3.6)
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -53,6 +56,9 @@ packages:
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
+
+  '@cfworker/json-schema@4.1.1':
+    resolution: {integrity: sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og==}
 
   '@cloudflare/kv-asset-handler@0.4.2':
     resolution: {integrity: sha512-SIOD2DxrRRwQ+jgzlXCqoEFiKOFqaPjhnNTGKXSRLvp1HiOvapLaFG2kEr9dYQTYe8rKrd9uvDUzmAITeNyaHQ==}
@@ -410,6 +416,15 @@ packages:
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
 
+  '@modelcontextprotocol/server@2.0.0-alpha.2':
+    resolution: {integrity: sha512-gmLgdHzlYM8L7Aw/+VE0kxjT25WKamtUSLNhdOgrJq5CrESvqVSoAfWSJJeNPUXNTluQ+dYDGFbKVitdsJtbPA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@cfworker/json-schema': ^4.1.1
+    peerDependenciesMeta:
+      '@cfworker/json-schema':
+        optional: true
+
   '@noble/ciphers@1.3.0':
     resolution: {integrity: sha512-2I0gnIVPtfnMw9ee9h1dJG7tp81+8Ob3OJb3Mv37rx5L40/b0i7djjCVvGOVqc9AEIQyvyu1i6ypKdFw8R8gQw==}
     engines: {node: ^14.21.3 || >=16}
@@ -468,6 +483,9 @@ packages:
 
   '@stablelib/wipe@1.0.1':
     resolution: {integrity: sha512-WfqfX/eXGiAd3RJe4VU2snh/ZPwtSjLG4ynQ/vYzvghTh7dHFcI1wl+nrkWG6lGhukOxOsUHfv8dUXr58D0ayg==}
+
+  '@toon-format/toon@2.1.0':
+    resolution: {integrity: sha512-JwWptdF5eOA0HaQxbKAzkpQtR4wSWTEfDlEy/y3/4okmOAX1qwnpLZMmtEWr+ncAhTTY1raCKH0kteHhSXnQqg==}
 
   '@types/node-fetch@2.6.13':
     resolution: {integrity: sha512-QGpRVpzSaUs30JBSGPjOg4Uveu384erbHBoT1zeONvyCfwQxIkUshLAOqN/k9EjGviPRmWTTe6aH2qySWKTVSw==}
@@ -644,12 +662,17 @@ packages:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
 
-  hono@4.11.9:
-    resolution: {integrity: sha512-Eaw2YTGM6WOxA6CXbckaEvslr2Ne4NFsKrvc0v97JD5awbmeBLO5w9Ho9L9kmKonrwF9RJlW6BxT1PVv/agBHQ==}
+  hono@4.12.14:
+    resolution: {integrity: sha512-am5zfg3yu6sqn5yjKBNqhnTX7Cv+m00ox+7jbaKkrLMRJ4rAdldd1xPd/JzbBWspqaQv6RSTrgFN95EsfhC+7w==}
     engines: {node: '>=16.9.0'}
 
   humanize-ms@1.2.1:
     resolution: {integrity: sha512-Fl70vYtsAFb/C06PTS9dZBo7ihau+Tu/DNCk/OyHhea07S+aeMWpFFkUaXRa8fI+ScZbEI8dfSxwY7gxZ9SAVQ==}
+
+  incur@0.3.25:
+    resolution: {integrity: sha512-jrSkzauM42ilbQJ6THVkAY6dTulkyVW0sZpVHdA8gfiBwrLrLnLUf8U3bAOegAKBIMSOFgk1idchgu9xm9HMng==}
+    engines: {node: '>=22'}
+    hasBin: true
 
   isows@1.0.7:
     resolution: {integrity: sha512-I1fSfDCZL5P0v33sVqeTDSpcstAg/N+wF5HS033mogOVIp4B+oHC7oOCsA3axAbBSGTJ8QubbNmnIRN/h8U7hg==}
@@ -680,6 +703,25 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
+  mppx@0.6.3:
+    resolution: {integrity: sha512-oIph21VeazRLYr4ArOhA4O1UMPNni9XMXcuEKa83IRR2A9zuGSio9XbAyFzmEwyghBBvAv8AN2tBGx1qd2dDaA==}
+    hasBin: true
+    peerDependencies:
+      '@modelcontextprotocol/sdk': '>=1.25.0'
+      elysia: '>=1'
+      express: '>=5'
+      hono: '>=4.12.14'
+      viem: '>=2.47.5'
+    peerDependenciesMeta:
+      '@modelcontextprotocol/sdk':
+        optional: true
+      elysia:
+        optional: true
+      express:
+        optional: true
+      hono:
+        optional: true
+
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
@@ -709,8 +751,16 @@ packages:
       zod:
         optional: true
 
-  ox@0.11.3:
-    resolution: {integrity: sha512-1bWYGk/xZel3xro3l8WGg6eq4YEKlaqvyMtVhfMFpbJzK2F6rj4EDRtqDCWVEJMkzcmEi9uW2QxsqELokOlarw==}
+  ox@0.14.15:
+    resolution: {integrity: sha512-3TubCmbKen/cuZQzX0qDbOS5lojjdSZ90lqKxWIDWd5siuJ0IJBaTXMYs8eMPLcraqnOwGZazz3apHPGiRCkGQ==}
+    peerDependencies:
+      typescript: '>=5.4.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
+  ox@0.14.20:
+    resolution: {integrity: sha512-rby38C3nDn8eQkf29Zgw4hkCZJ64Qqi0zRPWL8ENUQ7JVuoITqrVtwWQgM/He19SCMUEc7hS/Sjw0jIOSLJhOw==}
     peerDependencies:
       typescript: '>=5.4.0'
     peerDependenciesMeta:
@@ -761,6 +811,9 @@ packages:
     resolution: {integrity: sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g==}
     engines: {node: '>=18'}
 
+  tokenx@1.3.0:
+    resolution: {integrity: sha512-NLdXTEZkKiO0gZuLtMoZKjCXTREXeZZt8nnnNeyoXtNZAfG/GKGSbQtLU5STspc0rMSwcA+UJfWZkbNU01iKmQ==}
+
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
 
@@ -800,8 +853,8 @@ packages:
   valid-url@1.0.9:
     resolution: {integrity: sha512-QQDsV8OnSf5Uc30CKSwG9lnhMPe6exHtTXLRYX8uMwKENy640pU+2BgBL0LRbDh/eYRahNCS7aewCx0wf3NYVA==}
 
-  viem@2.45.2:
-    resolution: {integrity: sha512-GXPMmj0ukqFNL87sgpsZBy4CjGvsFQk42/EUdsn8dv3ZWtL4ukDXNCM0nME2hU0IcuS29CuUbrwbZN6iWxAipw==}
+  viem@2.48.4:
+    resolution: {integrity: sha512-mReP/rgY2P+WeeRSG4sUvccCLKfyAW1C73Y3KkobAqgzYmVna9qyUMNE44xIUkDtfvRuC33r24UhF4baBYovsg==}
     peerDependencies:
       typescript: '>=5.0.4'
     peerDependenciesMeta:
@@ -869,6 +922,11 @@ packages:
       utf-8-validate:
         optional: true
 
+  yaml@2.8.3:
+    resolution: {integrity: sha512-AvbaCLOO2Otw/lW5bmh9d/WEdcDFdQp2Z2ZUH3pX9U2ihyUY0nvLv7J6TrWowklRGPYbB/IuIMfYgxaCPg5Bpg==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   youch-core@0.3.3:
     resolution: {integrity: sha512-ho7XuGjLaJ2hWHoK8yFnsUGy2Y5uDpqSTq1FkHLK4/oqKtyUU1AFbOOxY4IpC9f0fTLjwYbslUz0Po5BpD1wrA==}
 
@@ -886,6 +944,8 @@ snapshots:
   '@adraffy/ens-normalize@1.10.1': {}
 
   '@adraffy/ens-normalize@1.11.1': {}
+
+  '@cfworker/json-schema@4.1.1': {}
 
   '@cloudflare/kv-asset-handler@0.4.2': {}
 
@@ -1104,6 +1164,12 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@modelcontextprotocol/server@2.0.0-alpha.2(@cfworker/json-schema@4.1.1)':
+    dependencies:
+      zod: 4.3.6
+    optionalDependencies:
+      '@cfworker/json-schema': 4.1.1
+
   '@noble/ciphers@1.3.0': {}
 
   '@noble/curves@1.2.0':
@@ -1167,6 +1233,8 @@ snapshots:
 
   '@stablelib/wipe@1.0.1': {}
 
+  '@toon-format/toon@2.1.0': {}
+
   '@types/node-fetch@2.6.13':
     dependencies:
       '@types/node': 22.19.10
@@ -1191,7 +1259,7 @@ snapshots:
   '@x402/evm@2.3.1':
     dependencies:
       '@x402/core': 2.3.1
-      viem: 2.45.2(zod@3.25.76)
+      viem: 2.48.4(zod@3.25.76)
       zod: 3.25.76
     transitivePeerDependencies:
       - bufferutil
@@ -1205,7 +1273,7 @@ snapshots:
       ajv: 8.17.1
       siwe: 2.3.2(ethers@6.16.0)
       tweetnacl: 1.0.3
-      viem: 2.45.2(zod@3.25.76)
+      viem: 2.48.4(zod@3.25.76)
       zod: 3.25.76
     transitivePeerDependencies:
       - bufferutil
@@ -1213,11 +1281,11 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@x402/hono@2.3.0(ethers@6.16.0)(hono@4.11.9)':
+  '@x402/hono@2.3.0(ethers@6.16.0)(hono@4.12.14)':
     dependencies:
       '@x402/core': 2.3.1
       '@x402/extensions': 2.3.1(ethers@6.16.0)
-      hono: 4.11.9
+      hono: 4.12.14
       zod: 3.25.76
     transitivePeerDependencies:
       - bufferutil
@@ -1398,11 +1466,20 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.11.9: {}
+  hono@4.12.14: {}
 
   humanize-ms@1.2.1:
     dependencies:
       ms: 2.1.3
+
+  incur@0.3.25:
+    dependencies:
+      '@cfworker/json-schema': 4.1.1
+      '@modelcontextprotocol/server': 2.0.0-alpha.2(@cfworker/json-schema@4.1.1)
+      '@toon-format/toon': 2.1.0
+      tokenx: 1.3.0
+      yaml: 2.8.3
+      zod: 4.3.6
 
   isows@1.0.7(ws@8.18.3):
     dependencies:
@@ -1432,6 +1509,17 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
+  mppx@0.6.3(hono@4.12.14)(viem@2.48.4(zod@4.3.6)):
+    dependencies:
+      incur: 0.3.25
+      ox: 0.14.15(zod@4.3.6)
+      viem: 2.48.4(zod@4.3.6)
+      zod: 4.3.6
+    optionalDependencies:
+      hono: 4.12.14
+    transitivePeerDependencies:
+      - typescript
+
   ms@2.1.3: {}
 
   node-domexception@1.0.0: {}
@@ -1455,7 +1543,20 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  ox@0.11.3(zod@3.25.76):
+  ox@0.14.15(zod@4.3.6):
+    dependencies:
+      '@adraffy/ens-normalize': 1.11.1
+      '@noble/ciphers': 1.3.0
+      '@noble/curves': 1.9.1
+      '@noble/hashes': 1.8.0
+      '@scure/bip32': 1.7.0
+      '@scure/bip39': 1.6.0
+      abitype: 1.2.3(zod@4.3.6)
+      eventemitter3: 5.0.1
+    transitivePeerDependencies:
+      - zod
+
+  ox@0.14.20(zod@3.25.76):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
@@ -1468,7 +1569,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  ox@0.11.3(zod@4.3.6):
+  ox@0.14.20(zod@4.3.6):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
@@ -1538,6 +1639,8 @@ snapshots:
 
   supports-color@10.2.2: {}
 
+  tokenx@1.3.0: {}
+
   tr46@0.0.3: {}
 
   tslib@2.7.0: {}
@@ -1572,7 +1675,7 @@ snapshots:
 
   valid-url@1.0.9: {}
 
-  viem@2.45.2(zod@3.25.76):
+  viem@2.48.4(zod@3.25.76):
     dependencies:
       '@noble/curves': 1.9.1
       '@noble/hashes': 1.8.0
@@ -1580,14 +1683,14 @@ snapshots:
       '@scure/bip39': 1.6.0
       abitype: 1.2.3(zod@3.25.76)
       isows: 1.0.7(ws@8.18.3)
-      ox: 0.11.3(zod@3.25.76)
+      ox: 0.14.20(zod@3.25.76)
       ws: 8.18.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
       - zod
 
-  viem@2.45.2(zod@4.3.6):
+  viem@2.48.4(zod@4.3.6):
     dependencies:
       '@noble/curves': 1.9.1
       '@noble/hashes': 1.8.0
@@ -1595,7 +1698,7 @@ snapshots:
       '@scure/bip39': 1.6.0
       abitype: 1.2.3(zod@4.3.6)
       isows: 1.0.7(ws@8.18.3)
-      ox: 0.11.3(zod@4.3.6)
+      ox: 0.14.20(zod@4.3.6)
       ws: 8.18.3
     transitivePeerDependencies:
       - bufferutil
@@ -1641,6 +1744,8 @@ snapshots:
   ws@8.18.0: {}
 
   ws@8.18.3: {}
+
+  yaml@2.8.3: {}
 
   youch-core@0.3.3:
     dependencies:

@@ -14,6 +14,15 @@ import { handleMCPRequest } from "./mcp/server";
 import { WorkflowTracker, parseAgentStep } from "./router/workflow";
 import { callDirectProvider, getProviderName, isDirectProviderAvailable } from "./providers/index";
 import OpenAI from "openai";
+import {
+  PRICE_BY_TIER,
+  buildMppWwwAuthenticate,
+  createMppx,
+  hasMppCredential,
+  hasX402Credential,
+  isMppConfigured,
+  toMppAmount,
+} from "./payments/mpp";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -95,16 +104,16 @@ function normalizeRoutingBudget(rawBudget: string | undefined, authTier: string)
   if (authTier === "free" || authTier === "playground") {
     return "free";
   }
-  // Paid/x402 default to "auto" if no budget specified
-  const defaultBudget = (authTier === "paid" || authTier === "x402") ? "auto" : "free";
+  // Paid/x402/mpp default to "auto" if no budget specified
+  const defaultBudget = (authTier === "paid" || authTier === "x402" || authTier === "mpp") ? "auto" : "free";
   return _normalizeRoutingBudget(rawBudget || defaultBudget);
 }
 
 function getChargedPriceUsd(authTier: string, budget: string, complexityTier: string): number {
   if (authTier === "paid") return 0.002;
 
-  // x402 path: variable pricing based on complexity (TASK-59)
-  if (authTier === "x402" || (authTier === "free" && budget !== "free")) {
+  // x402/mpp path: variable pricing based on complexity (TASK-59)
+  if (authTier === "x402" || authTier === "mpp" || (authTier === "free" && budget !== "free")) {
     const priceByTier: Record<string, number> = {
       SIMPLE: 0.001,
       MEDIUM: 0.002,
@@ -137,7 +146,10 @@ app.use("/v1/*", async (c, next) => {
   }
 
   const authHeader = c.req.header("Authorization");
-  const apiKey = authHeader?.replace("Bearer ", "");
+  // Only treat header as an API key if it uses the Bearer scheme.
+  // Authorization: Payment <credential> is the MPP payment header — must not be
+  // hashed and looked up as an API key, or MPP clients get a spurious 401.
+  const apiKey = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : undefined;
 
   if (apiKey) {
     const keyHash = await hashApiKey(apiKey);
@@ -206,14 +218,31 @@ app.use("/v1/*", async (c, next) => {
   try {
     const clientIP = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
     const authTier = (c.get("authTier" as never) as string) || "free";
-    const hasX402Header = Boolean(c.req.header("payment-signature") || c.req.header("x-payment"));
-    const effectiveTier = authTier === "free" && hasX402Header ? "x402" : authTier;
+    const hasX402Header = hasX402Credential(
+      c.req.header("payment-signature"),
+      c.req.header("x-payment")
+    );
+    // Only promote tier to mpp/x402 when the request explicitly asks for paid
+    // routing (budget != "free"). Prevents sending "Authorization: Payment garbage"
+    // to claim the 1000/hr payment tier while still receiving free-tier routing.
+    // Body isn't parsed yet so we do a cheap text peek (clone avoids consuming the stream).
+    const rawBodyText = await c.req.raw.clone().text().catch(() => "");
+    const appearsFreeBudget =
+      rawBodyText.includes('"budget":"free"') ||
+      rawBodyText.includes('"budget": "free"') ||
+      !rawBodyText.includes('"budget"'); // no budget field → treated as free
+    const hasMppHeader = !appearsFreeBudget && hasMppCredential(c.req.header("authorization"));
+    const effectiveTier =
+      authTier === "free" && hasMppHeader ? "mpp" :
+      authTier === "free" && hasX402Header && !appearsFreeBudget ? "x402" :
+      authTier;
     const userId = (c.get("userId" as never) as string) || clientIP;
 
     const limits: Record<string, number> = {
       free: 20,
       playground: 50,
       x402: 1000,
+      mpp: 1000,
       paid: 1000,
     };
 
@@ -311,82 +340,119 @@ app.use("/v1/chat/completions", async (c, next) => {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
-  // Already authenticated via API key → bypass x402
+  // Already authenticated via API key → bypass payment middleware
   if (isAuthenticated) {
     return await next();
   }
 
-  // Body parsing and complexity scoring completed above.
-  // Smart routing logic is now in the main endpoint handler (mode=default path).
-
-  // Unauthenticated users with no explicit budget get free tier
+  // Unauthenticated users with free budget pass through to free-model routing
   if (budget === "free" || budget === "") {
     return await next();
   }
 
-  // Dynamic x402 pricing based on complexity tier (TASK-59)
-  const X402_PRICE_BY_TIER: Record<string, string> = {
-    SIMPLE: "$0.001",   // Free models only (~1-2 models, simple factual queries)
-    MEDIUM: "$0.002",   // Cheap paid models (3-4 models, moderate reasoning)
-    COMPLEX: "$0.005",  // Premium models (4-5 models including GPT-4o/Gemini Pro)
-    REASONING: "$0.005",
+  // Complexity-based price — shared between MPP and x402 rails (no divergence)
+  const price = PRICE_BY_TIER[complexityTier] ?? "$0.002";
+  const priceDescription = `ArcRouter — ${complexityTier} query. SIMPLE $0.001 / MEDIUM $0.002 / COMPLEX $0.005.`;
+
+  console.log(`[Auth] Unauthenticated request budget="${budget}" complexity=${complexityTier} price=${price}`);
+
+  // ── MPP path ─────────────────────────────────────────────────────────────
+  // Authorization: Payment <credential> header present → verify via mppx
+  if (hasMppCredential(c.req.header("authorization"))) {
+    if (!isMppConfigured(c.env)) {
+      return c.json({ error: "Payment required", message: "MPP not configured. Use budget='free' or an API key." }, 402);
+    }
+    try {
+      const mppx = createMppx(c.env);
+      const result = await mppx.charge({ amount: toMppAmount(price), description: priceDescription })(c.req.raw);
+      if (result.status === 402) {
+        // result.challenge is already a Web API Response (the 402 with WWW-Authenticate header).
+        // The cast is safe: for HTTP transport, Transport.ChallengeOutputOf<Http> = Response.
+        return result.challenge as Response;
+      }
+      // Payment verified
+      c.set("authTier" as never, "mpp" as never);
+      await next();
+      c.res = result.withReceipt(c.res);
+      return;
+    } catch (err: unknown) {
+      console.error("[MPP] Middleware error:", err instanceof Error ? err.message : String(err));
+      return c.json({ error: "Payment verification failed", message: "MPP payment could not be verified." }, 402);
+    }
+  }
+
+  // ── x402 path ────────────────────────────────────────────────────────────
+  // X-PAYMENT / payment-signature header present → verify via existing x402 middleware
+  if (hasX402Credential(c.req.header("payment-signature"), c.req.header("x-payment"))) {
+    if (!c.env.X402_WALLET_ADDRESS) {
+      return c.json({ error: "Payment required", message: "x402 not configured. Use budget='free' or an API key." }, 402);
+    }
+    try {
+      const dynamicHandler = paymentMiddleware(
+        {
+          "POST /v1/chat/completions": {
+            accepts: [{ scheme: "exact", price, network: "eip155:8453", payTo: c.env.X402_WALLET_ADDRESS }],
+            description: priceDescription,
+            mimeType: "application/json",
+          },
+        },
+        x402Server
+      );
+      const wrappedNext = async () => {
+        c.set("authTier" as never, "x402" as never);
+        return await next();
+      };
+      return await dynamicHandler(c, wrappedNext);
+    } catch (err: unknown) {
+      console.error("[x402] Middleware error:", err instanceof Error ? err.message : String(err));
+      return c.json({
+        error: "Payment required",
+        x402: {
+          version: 2,
+          accepts: [{ scheme: "exact", price, network: "eip155:8453", payTo: c.env.X402_WALLET_ADDRESS ?? "" }],
+          description: priceDescription,
+        },
+      }, 402);
+    }
+  }
+
+  // ── No payment credential → dual-rail 402 challenge ──────────────────────
+  // Return BOTH MPP (WWW-Authenticate: Payment) and x402 challenge so any
+  // client can pick its preferred payment rail. Per MPP spec, clients ignore
+  // headers they don't understand — backward compatible with x402 clients.
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  // Generate MPP challenge (async, uses HMAC-bound ID)
+  if (isMppConfigured(c.env)) {
+    try {
+      const wwwAuth = await buildMppWwwAuthenticate(c.env, toMppAmount(price), priceDescription);
+      headers["WWW-Authenticate"] = wwwAuth;
+    } catch (err: unknown) {
+      console.error("[MPP] Challenge generation error:", err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const responseBody: Record<string, unknown> = {
+    error: "Payment required",
+    message: `This endpoint requires payment. Price: ${price} (${complexityTier} query). Use budget='free' for free models.`,
+    price,
+    complexity: complexityTier,
+    payment_methods: [
+      ...(isMppConfigured(c.env) ? [{ method: "mpp", header: "Authorization: Payment <credential>", chain: "tempo" }] : []),
+      ...(c.env.X402_WALLET_ADDRESS ? [{ method: "x402", header: "X-PAYMENT <credential>", chain: "base-mainnet" }] : []),
+    ],
   };
 
-  const x402Price = X402_PRICE_BY_TIER[complexityTier];
-
-  console.log(`[Auth] Unauthenticated request with budget="${budget}". Enforcing x402. Complexity: ${complexityTier}, Price: ${x402Price}`);
-
-  if (!c.env.X402_WALLET_ADDRESS) {
-    return c.json({
-      error: "Payment required",
-      message: "x402 payment is not configured on this server. Use budget='free' or authenticate with an API key.",
-    }, 402);
-  }
-
-  try {
-    const dynamicHandler = paymentMiddleware(
-      {
-        "POST /v1/chat/completions": {
-          accepts: [
-            {
-              scheme: "exact",
-              price: x402Price, // Dynamic price based on prompt complexity
-              network: "eip155:8453", // Base Mainnet
-              payTo: c.env.X402_WALLET_ADDRESS,
-            },
-          ],
-          description: `ArcRouter — ${complexityTier} query consensus verification`,
-          mimeType: "application/json",
-        },
-      },
-      x402Server
-    );
-
-    // Wrap next() so authTier is set to "x402" only when payment succeeds
-    // (paymentMiddleware calls next() on success, returns 402 on failure)
-    const wrappedNext = async () => {
-      c.set("authTier" as never, "x402" as never);
-      return await next();
+  // Include x402 challenge data in body for x402-aware clients
+  if (c.env.X402_WALLET_ADDRESS) {
+    responseBody.x402 = {
+      version: 2,
+      accepts: [{ scheme: "exact", price, network: "eip155:8453", payTo: c.env.X402_WALLET_ADDRESS }],
+      description: priceDescription,
     };
-
-    return await dynamicHandler(c, wrappedNext);
-  } catch (error: unknown) {
-    // x402 facilitator error — return manual 402 with dynamic price
-    console.error("[x402] Middleware error:", error instanceof Error ? error.message : String(error));
-    return c.json({
-      error: "Payment required",
-      x402: {
-        version: 2,
-        accepts: [{
-          scheme: "exact",
-          price: x402Price, // Return dynamic price in error response
-          network: "eip155:8453",
-          payTo: c.env.X402_WALLET_ADDRESS,
-        }],
-        description: `ArcRouter — ${complexityTier} query. Price varies by complexity: SIMPLE ($0.001), MEDIUM ($0.002), COMPLEX ($0.005). Use budget='free' for free tier.`,
-      },
-    }, 402);
   }
+
+  return new Response(JSON.stringify(responseBody), { status: 402, headers });
 });
 
 // Main Endpoint: Run consensus logic
@@ -1519,13 +1585,54 @@ app.get("/", (c) => {
     tiers: {
       free: "No API key required. Free-tier models only, 20 requests/hour.",
       paid: "API key required. All budget tiers, Stripe metered billing, $0.002 per request.",
-      x402: "USDC payment on Base Mainnet. Variable pricing: $0.001 (simple), $0.002 (medium), $0.005 (complex)."
+      x402: "USDC payment on Base Mainnet. Variable pricing: $0.001 (simple), $0.002 (medium), $0.005 (complex).",
+      mpp: "Tempo chain payment via MPP. Same pricing as x402. Send Authorization: Payment <credential>.",
     },
     modes: {
       default: "Smart routing to the best single model from benchmark scores.",
       council: "Multi-model consensus and confidence scoring.",
     },
   });
+});
+
+// MPP discovery endpoint — agents auto-discover payment methods and pricing.
+// Returns an OpenAPI-compatible document advertising our MPP and x402 support.
+app.get("/openapi.json", cors(), (c) => {
+  return c.json({
+    openapi: "3.1.0",
+    info: {
+      title: "ArcRouter API",
+      description: "Intelligent LLM routing. Route any prompt to the best model. Supports API key, x402 (Base USDC), and MPP (Tempo) payments.",
+      version: "1.0.0",
+    },
+    servers: [{ url: "https://api.arcrouter.com", description: "Production" }],
+    paths: {
+      "/v1/chat/completions": {
+        post: {
+          summary: "Route a prompt to the best AI model",
+          description: "OpenAI-compatible endpoint. Free tier available with budget=free. Paid tier via API key, x402, or MPP.",
+          "x-payment": {
+            methods: [
+              {
+                method: "tempo",
+                intent: "charge",
+                pricing: PRICE_BY_TIER,
+                chain: "tempo-mainnet",
+                header: "Authorization: Payment <credential>",
+              },
+              {
+                method: "x402",
+                pricing: PRICE_BY_TIER,
+                chain: "base-mainnet",
+                header: "X-PAYMENT <credential>",
+              },
+            ],
+            free_tier: "Set budget=free in request body for free models (rate-limited)",
+          },
+        },
+      },
+    },
+  }, 200, { "Cache-Control": "public, max-age=300" });
 });
 
 // Public: Get all models with their benchmark scores (no auth required)
