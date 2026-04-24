@@ -352,7 +352,7 @@ app.use("/v1/chat/completions", async (c, next) => {
 
   // Complexity-based price — shared between MPP and x402 rails (no divergence)
   const price = PRICE_BY_TIER[complexityTier] ?? "$0.002";
-  const priceDescription = `ArcRouter — ${complexityTier} query. SIMPLE $0.001 / MEDIUM $0.002 / COMPLEX $0.005.`;
+  const priceDescription = `ArcRouter - ${complexityTier} query. SIMPLE $0.001 / MEDIUM $0.002 / COMPLEX $0.005.`;
 
   console.log(`[Auth] Unauthenticated request budget="${budget}" complexity=${complexityTier} price=${price}`);
 

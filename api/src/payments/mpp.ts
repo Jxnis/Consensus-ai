@@ -32,7 +32,9 @@ export function createMppx(env: CloudflareBindings) {
   return Mppx.create({
     secretKey: env.MPP_SECRET_KEY,
     methods: [
-      tempo({
+      // tempo.charge only — tempo() also registers session which requires a signing
+      // private key for on-chain channel settlement. Charge is all we need for Phase 1.
+      tempo.charge({
         recipient: env.MPP_TEMPO_RECIPIENT as `0x${string}`,
         // Optimistic settlement: sub-cent micropayments are low fraud risk.
         // 500ms Tempo finality on every LLM request would destroy P90 latency.
