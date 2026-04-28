@@ -372,8 +372,30 @@ app.use("/v1/chat/completions", async (c, next) => {
       }
       // Payment verified
       c.set("authTier" as never, "mpp" as never);
+      const mppStartedAt = Date.now();
       await next();
       c.res = result.withReceipt(c.res);
+
+      // Log MPP receipt to KV for reconciliation (non-blocking, 30-day TTL)
+      const mppReceiptHeader = c.res.headers.get("Payment-Receipt");
+      if (mppReceiptHeader) {
+        const receiptKey = `mpp_receipt:${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+        c.executionCtx.waitUntil(
+          c.env.CONSENSUS_CACHE.put(
+            receiptKey,
+            JSON.stringify({
+              timestamp: Date.now(),
+              price,
+              complexity_tier: complexityTier,
+              latency_ms: Date.now() - mppStartedAt,
+              method: "mpp",
+              chain: "tempo",
+              receipt_header: mppReceiptHeader,
+            }),
+            { expirationTtl: 60 * 60 * 24 * 30 }
+          )
+        );
+      }
       return;
     } catch (err: unknown) {
       console.error("[MPP] Middleware error:", err instanceof Error ? err.message : String(err));
@@ -1203,6 +1225,32 @@ app.post("/v1/chat/completions", async (c) => {
           }
           if (agentStep.complexityTier) {
             responseHeaders['X-ArcRouter-Agent-Step'] = c.req.header("X-Agent-Step") || "";
+          }
+
+          // Per-request log to D1 for dashboard (non-blocking)
+          if (c.env.SCORE_DB) {
+            const { writeRoutingLog } = await import('./router/routing-log');
+            const usage = (completion as { usage?: { prompt_tokens?: number; completion_tokens?: number } })?.usage;
+            c.executionCtx.waitUntil(
+              writeRoutingLog(c.env.SCORE_DB, {
+                request_id: requestId,
+                timestamp: Date.now(),
+                api_key_hash: c.get('keyHash' as never) as string | undefined,
+                auth_tier: authTier,
+                model_id: model.id,
+                topic,
+                complexity_tier: complexity.tier,
+                latency_ms: Date.now() - requestStartedAt,
+                input_tokens: usage?.prompt_tokens,
+                output_tokens: usage?.completion_tokens,
+                cost_usd: estimatedCostUsd,
+                call_path: usedDirectProvider ? `direct:${getProviderName(model.id)}` : 'openrouter',
+                status: 'success',
+                is_agentic: complexity.isAgentic,
+                mode: 'default',
+                session_id: sessionId || undefined,
+              })
+            );
           }
 
           return c.json({
