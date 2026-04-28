@@ -101,6 +101,67 @@ const TOOLS = [
       properties: {},
     },
   },
+  {
+    name: "arcrouter_council",
+    description:
+      "Run a prompt through council mode — multiple AI models answer in parallel and a chairman synthesizes their verdicts. " +
+      "Use for high-stakes questions where you want consensus or hallucination detection. " +
+      "Slower than arcrouter_chat (5-15s) but higher confidence.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prompt: {
+          type: "string",
+          description: "The question or prompt to verify across multiple models",
+        },
+        budget: {
+          type: "string",
+          enum: ["free", "economy", "auto", "premium"],
+          description: "Council member quality. 'free' = free models. 'auto' = best mix.",
+          default: "auto",
+        },
+      },
+      required: ["prompt"],
+    },
+  },
+  {
+    name: "arcrouter_workflow",
+    description:
+      "Get usage stats for a workflow session — total spend, models used, latency, tier distribution. " +
+      "Pass the session_id used in your workflow_budget request body. " +
+      "No authentication required — the session_id is the secret.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        session_id: {
+          type: "string",
+          description: "The workflow session ID (set in workflow_budget.session_id of your request)",
+        },
+      },
+      required: ["session_id"],
+    },
+  },
+  {
+    name: "arcrouter_usage",
+    description:
+      "Get cumulative usage stats for an ArcRouter API key — daily request counts, total cost, period summary. " +
+      "Provide your API key (sk_...) to query your own usage. Defaults to last 30 days.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        api_key: {
+          type: "string",
+          description: "Your ArcRouter API key (sk_...). Required.",
+        },
+        days: {
+          type: "number",
+          description: "Number of days to query (1-90). Default: 30.",
+          default: 30,
+        },
+      },
+      required: ["api_key"],
+    },
+  },
 ];
 
 function ok(id: string | number | null | undefined, result: unknown): JSONRPCResponse {
@@ -450,13 +511,233 @@ async function callTool(
       };
     }
 
+    case "arcrouter_council": {
+      const prompt = String(toolArgs.prompt || "").trim();
+      const budget = String(toolArgs.budget || "auto");
+
+      if (!prompt) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Error: prompt is required" }],
+        };
+      }
+
+      try {
+        const complexity = scorePrompt(prompt);
+        const routingBudget = normalizeRoutingBudget(budget);
+        const { CouncilEngine } = await import("../council/engine");
+        const { routingBudgetToCouncilBudget } = await import("../router/budget");
+        const engine = new CouncilEngine(env);
+        const councilBudget = routingBudgetToCouncilBudget(routingBudget);
+        const result = await engine.runConsensus(
+          { prompt, budget: councilBudget, reliability: "standard", mode: "council" },
+          complexity.tier
+        );
+
+        // Build agreement visualization
+        const totalVotes = result.votes.length;
+        const agreeing = result.votes.filter((v) => v.agrees).length;
+        const agreementPct = totalVotes > 0 ? Math.round((agreeing / totalVotes) * 100) : 0;
+        const voteLines = result.votes.map(
+          (v, i) => `  ${i + 1}. ${v.model} ${v.agrees ? "✓ agrees" : "✗ dissents"}`
+        );
+
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `Council answer (confidence ${Math.round(result.confidence * 100)}%, ${agreementPct}% agreement):\n\n${result.answer}\n\n` +
+                `--- Council members ---\n${voteLines.join("\n")}\n` +
+                (result.synthesized ? "\nNote: Chairman synthesized the final answer." : ""),
+            },
+          ],
+          metadata: {
+            mode: "council",
+            confidence: result.confidence,
+            agreement_pct: agreementPct,
+            total_votes: totalVotes,
+            agreeing_votes: agreeing,
+            synthesized: result.synthesized ?? false,
+            chairman_used: result.deliberation?.chairman_used ?? false,
+            complexity_tier: complexity.tier,
+            budget_used: routingBudget,
+            votes: result.votes.map((v) => ({ model: v.model, agrees: v.agrees })),
+          },
+        };
+      } catch (councilErr) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: `Council mode failed: ${councilErr instanceof Error ? councilErr.message : String(councilErr)}`,
+            },
+          ],
+        };
+      }
+    }
+
+    case "arcrouter_workflow": {
+      const sessionId = String(toolArgs.session_id || "").trim();
+
+      if (!sessionId || sessionId.length < 4) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Error: session_id is required (min 4 chars)" }],
+        };
+      }
+
+      if (!env.CONSENSUS_CACHE) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Cache not available" }],
+        };
+      }
+
+      try {
+        const { WorkflowTracker } = await import("../router/workflow");
+        const tracker = new WorkflowTracker(env.CONSENSUS_CACHE);
+        const usage = await tracker.getUsage(sessionId);
+
+        if (!usage) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: `Workflow session '${sessionId}' not found or expired.`,
+              },
+            ],
+          };
+        }
+
+        const lines = [
+          `Workflow: ${sessionId}`,
+          `Total spend: $${usage.total_spent_usd.toFixed(6)} / $${usage.total_budget_usd.toFixed(2)} (${usage.budget_pct_used.toFixed(1)}%)`,
+          `Budget remaining: $${usage.budget_remaining_usd.toFixed(6)}`,
+          `Requests: ${usage.total_requests}`,
+          `Avg latency: ${usage.avg_latency_ms}ms`,
+          `Models used: ${(usage.models_used || []).join(", ") || "(none)"}`,
+          `Tier distribution: ${Object.entries(usage.tier_distribution || {}).map(([t, n]) => `${t}=${n}`).join(", ") || "(none)"}`,
+        ];
+
+        return {
+          content: [{ type: "text", text: lines.join("\n") }],
+          metadata: usage as unknown as Record<string, unknown>,
+        };
+      } catch (workflowErr) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: `Workflow query failed: ${workflowErr instanceof Error ? workflowErr.message : String(workflowErr)}`,
+            },
+          ],
+        };
+      }
+    }
+
+    case "arcrouter_usage": {
+      const apiKey = String(toolArgs.api_key || "").trim();
+      const daysArg = typeof toolArgs.days === "number" ? toolArgs.days : 30;
+      const days = Math.min(Math.max(daysArg, 1), 90);
+
+      if (!apiKey || !apiKey.startsWith("sk_")) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Error: api_key is required (must start with 'sk_')" }],
+        };
+      }
+
+      if (!env.CONSENSUS_CACHE) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: "Cache not available" }],
+        };
+      }
+
+      try {
+        // Hash key matching the same algorithm in index.ts (SHA-256 hex)
+        const bytes = new TextEncoder().encode(apiKey);
+        const digest = await crypto.subtle.digest("SHA-256", bytes);
+        const keyHash = Array.from(new Uint8Array(digest))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+
+        // Verify key exists
+        const keyData = await env.CONSENSUS_CACHE.get(`apikey:${keyHash}`);
+        if (!keyData) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: "Error: Invalid API key" }],
+          };
+        }
+
+        const today = new Date();
+        const dateKeys = Array.from({ length: days }, (_, i) => {
+          const d = new Date(today);
+          d.setDate(d.getDate() - i);
+          return d.toISOString().slice(0, 10);
+        });
+
+        const results = await Promise.all(
+          dateKeys.map((date) =>
+            env.CONSENSUS_CACHE.get(`usage:${keyHash}:${date}`, { type: "json" })
+              .then((data) => ({
+                date,
+                ...((data as { requests: number; cost_usd: number } | null) ?? { requests: 0, cost_usd: 0 }),
+              }))
+              .catch(() => ({ date, requests: 0, cost_usd: 0 }))
+          )
+        );
+        results.sort((a, b) => a.date.localeCompare(b.date));
+
+        const totalRequests = results.reduce((s, d) => s + d.requests, 0);
+        const totalCostUsd = parseFloat(results.reduce((s, d) => s + d.cost_usd, 0).toFixed(6));
+
+        const summary = [
+          `Period: ${dateKeys[dateKeys.length - 1]} → ${dateKeys[0]} (${days} days)`,
+          `Total requests: ${totalRequests}`,
+          `Total cost: $${totalCostUsd.toFixed(6)}`,
+        ];
+        const recent = results
+          .slice(-7)
+          .map((d) => `  ${d.date}: ${d.requests} req, $${d.cost_usd.toFixed(6)}`);
+        summary.push("", "Last 7 days:", ...recent);
+
+        return {
+          content: [{ type: "text", text: summary.join("\n") }],
+          metadata: {
+            period_days: days,
+            from: dateKeys[dateKeys.length - 1],
+            to: dateKeys[0],
+            total_requests: totalRequests,
+            total_cost_usd: totalCostUsd,
+            daily: results,
+          },
+        };
+      } catch (usageErr) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: `Usage query failed: ${usageErr instanceof Error ? usageErr.message : String(usageErr)}`,
+            },
+          ],
+        };
+      }
+    }
+
     default:
       return {
         isError: true,
         content: [
           {
             type: "text",
-            text: `Unknown tool: ${toolName}. Available tools: arcrouter_chat, arcrouter_models, arcrouter_health`,
+            text: `Unknown tool: ${toolName}. Available tools: arcrouter_chat, arcrouter_models, arcrouter_health, arcrouter_council, arcrouter_workflow, arcrouter_usage`,
           },
         ],
       };
