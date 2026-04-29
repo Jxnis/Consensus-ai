@@ -853,17 +853,53 @@ app.post("/v1/chat/completions", async (c) => {
       }
     }
 
-    // 6. Agentic preference: boost tool-capable models (Claude, GPT-4o) to front
+    // 6. Agentic routing: filter to tool-capable models, hard-block known-bad ones.
+    // Without this, free routers (e.g. openrouter/free) and tiny models get picked for
+    // tool-calling workflows and silently fail (commit immediately, no tools called).
+    let agenticFiltered = false;
+    let agenticWarning: string | undefined;
     if (complexity.isAgentic && !forcedModelId && !sessionPinnedModelId) {
-      const TOOL_CAPABLE_PATTERNS = [/claude/i, /gpt-4o/i, /gemini.*pro/i, /mistral.*large/i];
-      const toolCapable = candidateModels.filter(m =>
-        TOOL_CAPABLE_PATTERNS.some(p => p.test(m.id))
-      );
-      const others = candidateModels.filter(m =>
-        !TOOL_CAPABLE_PATTERNS.some(p => p.test(m.id))
-      );
+      // Models with verified, reliable tool/function-calling support.
+      const TOOL_CAPABLE_PATTERNS = [
+        /claude(-|\/|$)/i,                       // All Claude variants
+        /gpt-4o/i, /gpt-4\.1/i, /gpt-5/i,        // OpenAI GPT-4o, 4.1, 5
+        /gpt-4(?!.*o-?mini)/i,                   // GPT-4 (excluding 4o-mini already covered)
+        /o[1-9].*mini/i,                         // o-series reasoning (o3-mini, o4-mini)
+        /gemini.*(pro|flash)/i,                  // Gemini Pro/Flash (both support tools)
+        /mistral.*(large|medium)/i,              // Mistral Large/Medium
+        /deepseek.*(chat|coder|r1|v3)/i,         // DeepSeek tool-capable variants
+        /qwen.*(2\.5|3)/i,                       // Qwen 2.5+ supports tools
+        /llama-?(3|4).*?-(70b|405b|maverick|scout)/i,  // Large Llama variants
+        /grok-?[3-9]/i,                          // xAI Grok 3+
+        /command-r/i,                            // Cohere Command R/R+
+      ];
+      // Models that appear in DBs but reliably break on tool calls — hard exclude.
+      const NEVER_FOR_TOOLS = [
+        /openrouter\/(auto|free)/i,              // OpenRouter meta-routers
+        /-1\.2b/i, /-2b-/i, /-3b-/i,             // Tiny models < ~7B
+        /:free$/i,                               // Free-tier auto suffixes (ghost models)
+        /thinking-/i,                            // Pure thinking variants without tool API
+        /gpt-oss/i,                              // OSS GPT clones with broken tool support
+        /lfm-/i,                                 // Liquid models (limited tool support)
+      ];
+
+      const isToolCapable = (id: string) =>
+        TOOL_CAPABLE_PATTERNS.some(p => p.test(id)) &&
+        !NEVER_FOR_TOOLS.some(p => p.test(id));
+
+      const toolCapable = candidateModels.filter(m => isToolCapable(m.id));
+      const others = candidateModels.filter(m => !isToolCapable(m.id));
+
       if (toolCapable.length > 0) {
-        candidateModels = [...toolCapable, ...others];
+        // Hard filter: keep only tool-capable models; weak ones never get a turn.
+        candidateModels = toolCapable;
+        agenticFiltered = true;
+        console.log(`[Smart Router] Agentic filter: ${toolCapable.length}/${toolCapable.length + others.length} models pass tool-capability check`);
+      } else {
+        // No tool-capable models in pool — surface this clearly to the client.
+        // Keep original candidates rather than empty pool (better than 502), but warn.
+        agenticWarning = `No verified tool-capable models in budget="${effectiveRoutingBudget}" pool. Tool calling may fail. Try budget="auto" or "premium" for reliable agentic workflows.`;
+        console.warn(`[Smart Router] ${agenticWarning} (topic=${topic})`);
       }
     }
 
@@ -1280,6 +1316,8 @@ app.post("/v1/chat/completions", async (c) => {
               models_considered: modelsConsidered,
               candidate_models: candidateModelIds,
               is_agentic: complexity.isAgentic,
+              ...(agenticFiltered && { agentic_filter_applied: true }),
+              ...(agenticWarning && { agentic_warning: agenticWarning }),
               ...(agentStep.complexityTier && { agent_step_override: agentStep.complexityTier }),
               ...(estimatedCostUsd !== undefined && { estimated_cost_usd: estimatedCostUsd }),
               charged_cost_usd: getChargedPriceUsd(authTier, effectiveRoutingBudget, complexity.tier),

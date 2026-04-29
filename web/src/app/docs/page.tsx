@@ -184,6 +184,30 @@ const council = await client.chat.completions.create({
 console.log(council.consensus); // { confidence, votes, ... }`}
 </pre>
                 </div>
+
+                <div className="border border-amber-500/30 bg-amber-500/5 rounded-xl p-4 mt-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-amber-500 text-lg leading-none">⚠</span>
+                    <div className="flex-1 space-y-2">
+                      <p className="text-sm font-bold text-foreground">Using @ai-sdk/openai (Vercel AI SDK)?</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        The Vercel AI SDK defaults to OpenAI's newer Responses API (<code className="text-[11px] bg-muted px-1 rounded">/v1/responses</code>), which ArcRouter does NOT implement. Use <code className="text-[11px] bg-muted px-1 rounded">client.chat(modelId)</code> (not <code className="text-[11px] bg-muted px-1 rounded">client(modelId)</code>) so requests hit <code className="text-[11px] bg-muted px-1 rounded">/v1/chat/completions</code>:
+                      </p>
+                      <div className="bg-[#0a0a0b] p-3 rounded border border-white/10 overflow-x-auto">
+<pre className="text-zinc-300 font-mono text-[11px] leading-relaxed">
+{`import { createOpenAI } from '@ai-sdk/openai';
+const client = createOpenAI({ baseURL: "${apiUrl}" });
+
+// ❌ Wrong: model: client('auto')          → hits /v1/responses → 404
+// ✅ Right: model: client.chat('auto')     → hits /v1/chat/completions`}
+</pre>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Other SDKs (<code className="text-[11px] bg-muted px-1 rounded">openai</code> npm, official Python client, langchain, llamaindex) default to chat completions and don't need this.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -191,10 +215,10 @@ console.log(council.consensus); // { confidence, votes, ... }`}
             <section id="authentication" className="space-y-8 scroll-mt-24">
                 <div>
                    <h2 className="font-heading text-2xl text-foreground mb-4">Authentication</h2>
-                   <p className="text-muted-foreground">We support three tiers of authentication.</p>
+                   <p className="text-muted-foreground">We support four tiers of authentication.</p>
                 </div>
 
-                <div className="grid md:grid-cols-3 gap-6">
+                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div className="p-6 border border-border rounded-xl bg-card">
                         <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4">
                             <span className="text-emerald-500 text-xs font-bold">01</span>
@@ -217,9 +241,18 @@ console.log(council.consensus); // { confidence, votes, ... }`}
                         <div className="w-8 h-8 rounded-full bg-violet-500/10 flex items-center justify-center mb-4">
                             <span className="text-violet-500 text-xs font-bold">03</span>
                         </div>
-                        <h3 className="font-heading text-lg mb-2">x402 (USDC)</h3>
+                        <h3 className="font-heading text-lg mb-2">x402 (Base USDC)</h3>
                         <p className="text-sm text-muted-foreground mb-4">Pay per request with USDC on Base. Variable pricing by complexity. Ideal for agent-to-agent payments — no account needed.</p>
                         <code className="text-xs bg-muted px-2 py-1 rounded">X-PAYMENT header (auto)</code>
+                    </div>
+
+                    <div className="p-6 border border-border rounded-xl bg-card">
+                        <div className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center mb-4">
+                            <span className="text-orange-500 text-xs font-bold">04</span>
+                        </div>
+                        <h3 className="font-heading text-lg mb-2">MPP (Tempo)</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Machine Payments Protocol on Tempo (USDC.e). Sub-cent fees, 500ms finality. Built by Tempo + Stripe. <code className="text-[10px] bg-muted px-1 rounded">npm i mppx</code></p>
+                        <code className="text-xs bg-muted px-2 py-1 rounded">Authorization: Payment ...</code>
                     </div>
                 </div>
             </section>
