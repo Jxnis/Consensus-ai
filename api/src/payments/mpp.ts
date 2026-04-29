@@ -31,6 +31,10 @@ export function createMppx(env: CloudflareBindings) {
   }
   return Mppx.create({
     secretKey: env.MPP_SECRET_KEY,
+    // Explicit realm — without this, challenge generation (no request context)
+    // falls back to "MPP Payment" while verify auto-detects from request, causing
+    // a realm mismatch on credential verification.
+    realm: "api.arcrouter.com",
     methods: [
       // tempo.charge only — tempo() also registers session which requires a signing
       // private key for on-chain channel settlement. Charge is all we need for Phase 1.
