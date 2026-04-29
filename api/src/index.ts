@@ -549,7 +549,14 @@ app.post("/v1/chat/completions", async (c) => {
   const excludeModels = Array.isArray(body.exclude_models)
     ? (body.exclude_models as unknown[]).filter((m): m is string => typeof m === "string")
     : [];
-  const forcedModelId = typeof body.model === "string" && !body.model.startsWith("__alias:")
+  // "auto" / "default" / "" / "smart" are smart-routing sentinels — NOT forced model IDs.
+  // Without this guard, body.model = "auto" gets passed straight to OpenRouter as
+  // openrouter/auto (returning provider="Unknown" and bypassing our intelligent router).
+  const SMART_ROUTING_SENTINELS = new Set(["auto", "default", "smart", ""]);
+  const rawModel = typeof body.model === "string" ? body.model.trim().toLowerCase() : "";
+  const forcedModelId = typeof body.model === "string" &&
+                        !body.model.startsWith("__alias:") &&
+                        !SMART_ROUTING_SENTINELS.has(rawModel)
     ? body.model
     : undefined;
 
@@ -861,6 +868,8 @@ app.post("/v1/chat/completions", async (c) => {
     }
 
     const modelsConsidered = candidateModels.length;
+    // Surface top candidate IDs for client-side debugging (partner request).
+    const candidateModelIds = candidateModels.slice(0, 6).map(m => m.id);
 
     // Filter out circuit-broken models
     const healthyModels: typeof candidateModels = [];
@@ -1269,9 +1278,11 @@ app.post("/v1/chat/completions", async (c) => {
               data_source: dataSource,
               failover_count: failoverCount,
               models_considered: modelsConsidered,
+              candidate_models: candidateModelIds,
               is_agentic: complexity.isAgentic,
               ...(agentStep.complexityTier && { agent_step_override: agentStep.complexityTier }),
               ...(estimatedCostUsd !== undefined && { estimated_cost_usd: estimatedCostUsd }),
+              charged_cost_usd: getChargedPriceUsd(authTier, effectiveRoutingBudget, complexity.tier),
               ...(savingsVsGpt4 !== undefined && { savings_vs_gpt4_pct: savingsVsGpt4 }),
               ...(sessionId && { session_pinned: dataSource === 'session_pin' }),
               ...(workflowBudgetRemaining !== null && { workflow_budget_remaining_usd: workflowBudgetRemaining }),
