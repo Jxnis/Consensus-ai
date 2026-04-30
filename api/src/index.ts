@@ -126,6 +126,26 @@ function getChargedPriceUsd(authTier: string, budget: string, complexityTier: st
   return 0;
 }
 
+function shouldEnforceToolCall(
+  messages: Array<{ role: string; content?: unknown }> | undefined,
+  hasToolsArray: boolean,
+  toolChoice: unknown,
+  isAgentic: boolean
+): boolean {
+  if (!hasToolsArray) return false;
+  if (toolChoice === "required") return true;
+  if (!isAgentic) return false;
+
+  // Heuristic: only enforce when the prompt explicitly asks to call tools.
+  const joined = (messages || [])
+    .map((m) => (typeof m.content === "string" ? m.content : ""))
+    .join(" ")
+    .toLowerCase();
+  return /\b(use|call|invoke)\b.{0,24}\b(tool|tools)\b/.test(joined) ||
+         /\bstart by calling\b/.test(joined) ||
+         /\bdo not commit\b/.test(joined);
+}
+
 // API Key Authentication Middleware (runs before x402)
 app.use("/v1/*", async (c, next) => {
   // Localhost bypass is allowed only in explicit local/development environments.
@@ -374,6 +394,34 @@ app.use("/v1/chat/completions", async (c, next) => {
       c.set("authTier" as never, "mpp" as never);
       const mppStartedAt = Date.now();
       await next();
+
+      // Don't redeem payment for failed responses (5xx) — fairness for customers.
+      // Without this, the partner gets billed for "All models failed" 502s. The MPP
+      // payment was technically verified, but we didn't deliver a usable response.
+      const responseStatus = c.res.status;
+      if (responseStatus >= 500) {
+        // Skip withReceipt + log to a separate KV bucket for manual reconciliation.
+        // Add explicit header so client-side billing systems know not to deduct.
+        c.res.headers.set("X-MPP-Settlement", "skipped-server-error");
+        c.executionCtx.waitUntil(
+          c.env.CONSENSUS_CACHE.put(
+            `mpp_unbilled:${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+            JSON.stringify({
+              timestamp: Date.now(),
+              status: responseStatus,
+              price,
+              complexity_tier: complexityTier,
+              reason: "upstream_failure_no_redemption",
+              latency_ms: Date.now() - mppStartedAt,
+            }),
+            { expirationTtl: 60 * 60 * 24 * 90 } // 90 days for refund tracking
+          )
+        );
+        console.warn(`[MPP] Skipping payment redemption — response status=${responseStatus}`);
+        return;
+      }
+
+      // Success path: attach receipt, redeem payment
       c.res = result.withReceipt(c.res);
 
       // Log MPP receipt to KV for reconciliation (non-blocking, 30-day TTL)
@@ -656,8 +704,9 @@ app.post("/v1/chat/completions", async (c) => {
     const topicDetection = detectTopicDetailed(sanitizedPrompt);
     const topic = topicDetection.secondary || topicDetection.primary;
 
-    // Agentic override: prefer "code" topic for tool-use requests
-    const effectiveTopic = complexity.isAgentic && topic === "general" ? "code" : topic;
+    // Keep topic detection stable for agentic workflows.
+    // Forcing generic agentic traffic to "code" can degrade non-code tasks (e.g., research).
+    const effectiveTopic = topic;
 
     console.log(`[Smart Router] Topic detected: ${effectiveTopic} (confidence: ${topicDetection.confidence.toFixed(2)}, agentic: ${complexity.isAgentic})`);
 
@@ -669,7 +718,10 @@ app.post("/v1/chat/completions", async (c) => {
     const telemetry = new RoutingTelemetry(c.env.CONSENSUS_CACHE);
     const routeCache = new RouteCache(c.env.CONSENSUS_CACHE);
 
-    // Get top 3 models from D1 for failover chain
+    const desiredCandidateCount = complexity.isAgentic ? 10 : 3;
+    const routeCacheTopic = `${effectiveTopic}|${complexity.tier}|${complexity.isAgentic ? "agentic" : "standard"}`;
+
+    // Get candidate models from D1 for failover chain
     // First check cache to skip D1 query (unless bypass requested)
     const bypassCache = body.bypass_cache === true;
     let candidateModels: Array<{ id: string; name: string; provider: string; input_price: number; output_price: number }> = [];
@@ -679,7 +731,7 @@ app.post("/v1/chat/completions", async (c) => {
       if (c.env.SCORE_DB) {
         // Check cache first (saves ~4ms D1 query)
         const cacheVersion = bypassCache ? null : await routeCache.getCacheVersion();
-        const cachedModelId = bypassCache ? null : await routeCache.getCachedRouteWithVersion(effectiveTopic, effectiveRoutingBudget, cacheVersion);
+        const cachedModelId = bypassCache ? null : await routeCache.getCachedRouteWithVersion(routeCacheTopic, effectiveRoutingBudget, cacheVersion);
 
         if (cachedModelId) {
           // Cache hit! Use cached model as primary candidate
@@ -693,12 +745,12 @@ app.post("/v1/chat/completions", async (c) => {
 
             // Still get backups from D1 for failover
             const { getModelsForDomain } = await import('./db/queries');
-            const backupModels = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, effectiveRoutingBudget, complexity.tier);
-            if (backupModels && backupModels.length > 1) {
-              // Add top 2 backups (excluding cached model if it appears)
-              const backups = backupModels.filter(m => m.id !== cachedModelId).slice(0, 2);
-              candidateModels.push(...backups);
-            }
+              const backupModels = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, effectiveRoutingBudget, complexity.tier);
+              if (backupModels && backupModels.length > 1) {
+                // Add backups (excluding cached model if it appears)
+                const backups = backupModels.filter(m => m.id !== cachedModelId).slice(0, Math.max(0, desiredCandidateCount - 1));
+                candidateModels.push(...backups);
+              }
           } else {
             // Cached model not found (deleted?), fall through to normal D1 query
             console.log(`[Smart Router] Cached model ${cachedModelId} not found, querying D1...`);
@@ -763,13 +815,13 @@ app.post("/v1/chat/completions", async (c) => {
             const models = await getModelsForDomain(c.env.SCORE_DB, effectiveTopic, effectiveRoutingBudget, complexity.tier);
 
             if (models && models.length > 0) {
-              candidateModels = models.slice(0, 3); // Top 3 models
+              candidateModels = models.slice(0, desiredCandidateCount);
               dataSource = semanticResult?.fallback_reason ? `database_fallback:${semanticResult.fallback_reason}` : 'database';
-              console.log(`[Smart Router] D1 returned ${models.length} models, using top 3 for failover chain`);
+              console.log(`[Smart Router] D1 returned ${models.length} models, using top ${desiredCandidateCount} for failover chain`);
 
               // Cache the top model for future requests (async, don't block)
               c.executionCtx.waitUntil(
-                routeCache.cacheRoute(effectiveTopic, effectiveRoutingBudget, models[0].id, models[0].name)
+                routeCache.cacheRoute(routeCacheTopic, effectiveRoutingBudget, models[0].id, models[0].name)
               );
             }
           }
@@ -853,52 +905,56 @@ app.post("/v1/chat/completions", async (c) => {
       }
     }
 
-    // 6. Agentic routing: filter to tool-capable models, hard-block known-bad ones.
-    // Without this, free routers (e.g. openrouter/free) and tiny models get picked for
-    // tool-calling workflows and silently fail (commit immediately, no tools called).
+    // 6. Agentic routing guardrail for tool-use requests.
+    // Keep both chat and reasoning models eligible, but block known-bad tool models.
     let agenticFiltered = false;
+    let agenticTier: "guardrail" | undefined;
     let agenticWarning: string | undefined;
     if (complexity.isAgentic && !forcedModelId && !sessionPinnedModelId) {
-      // Models with verified, reliable tool/function-calling support.
       const TOOL_CAPABLE_PATTERNS = [
-        /claude(-|\/|$)/i,                       // All Claude variants
-        /gpt-4o/i, /gpt-4\.1/i, /gpt-5/i,        // OpenAI GPT-4o, 4.1, 5
-        /gpt-4(?!.*o-?mini)/i,                   // GPT-4 (excluding 4o-mini already covered)
-        /o[1-9].*mini/i,                         // o-series reasoning (o3-mini, o4-mini)
-        /gemini.*(pro|flash)/i,                  // Gemini Pro/Flash (both support tools)
-        /mistral.*(large|medium)/i,              // Mistral Large/Medium
-        /deepseek.*(chat|coder|r1|v3)/i,         // DeepSeek tool-capable variants
-        /qwen.*(2\.5|3)/i,                       // Qwen 2.5+ supports tools
-        /llama-?(3|4).*?-(70b|405b|maverick|scout)/i,  // Large Llama variants
-        /grok-?[3-9]/i,                          // xAI Grok 3+
-        /command-r/i,                            // Cohere Command R/R+
+        /claude(-|\/|$)/i,
+        /gpt-4o/i, /gpt-4\.1/i, /gpt-5/i,
+        /gpt-4(?!.*o-?mini)/i,
+        /o[1-9].*(mini|pro)/i,
+        /gemini.*(pro|flash)(?!-image)/i,
+        /mistral.*(large|medium)/i,
+        /deepseek.*(chat|coder|r1|v3|deepthink)/i,
+        /qwen.*(2\.5|3)/i,
+        /llama-?(3|4).*?-(70b|405b|maverick|scout)/i,
+        /grok-?[3-9]/i,
+        /command-r/i,
       ];
-      // Models that appear in DBs but reliably break on tool calls — hard exclude.
+      // Hard-blocked patterns — never used for tool calling.
       const NEVER_FOR_TOOLS = [
         /openrouter\/(auto|free)/i,              // OpenRouter meta-routers
         /-1\.2b/i, /-2b-/i, /-3b-/i,             // Tiny models < ~7B
-        /:free$/i,                               // Free-tier auto suffixes (ghost models)
-        /thinking-/i,                            // Pure thinking variants without tool API
-        /gpt-oss/i,                              // OSS GPT clones with broken tool support
-        /lfm-/i,                                 // Liquid models (limited tool support)
+        /:free$/i,                               // Free-tier auto suffixes
+        /^thinking-/i, /-thinking(:|$|-)/i,      // Pure thinking variants
+        /gpt-oss/i,                              // OSS GPT clones
+        /lfm-/i,                                 // Liquid models
+        /-image/i, /-vision-only/i,              // Image-only models
       ];
 
+      const isBlocked = (id: string) => NEVER_FOR_TOOLS.some(p => p.test(id));
       const isToolCapable = (id: string) =>
-        TOOL_CAPABLE_PATTERNS.some(p => p.test(id)) &&
-        !NEVER_FOR_TOOLS.some(p => p.test(id));
+        TOOL_CAPABLE_PATTERNS.some(p => p.test(id)) && !isBlocked(id);
+
+      const guardrailFiltered = candidateModels.filter(m => !isBlocked(m.id));
+      if (guardrailFiltered.length > 0) {
+        candidateModels = guardrailFiltered;
+        agenticFiltered = true;
+        agenticTier = "guardrail";
+      }
 
       const toolCapable = candidateModels.filter(m => isToolCapable(m.id));
-      const others = candidateModels.filter(m => !isToolCapable(m.id));
-
       if (toolCapable.length > 0) {
-        // Hard filter: keep only tool-capable models; weak ones never get a turn.
         candidateModels = toolCapable;
         agenticFiltered = true;
-        console.log(`[Smart Router] Agentic filter: ${toolCapable.length}/${toolCapable.length + others.length} models pass tool-capability check`);
+        agenticTier = "guardrail";
+        console.log(`[Smart Router] Agentic guardrail: ${toolCapable.length}/${candidateModels.length} tool-capable models remain`);
       } else {
-        // No tool-capable models in pool — surface this clearly to the client.
-        // Keep original candidates rather than empty pool (better than 502), but warn.
-        agenticWarning = `No verified tool-capable models in budget="${effectiveRoutingBudget}" pool. Tool calling may fail. Try budget="auto" or "premium" for reliable agentic workflows.`;
+        // No verified tool-capable models in current pool — keep non-blocked list with warning.
+        agenticWarning = `No verified tool-capable models in budget="${effectiveRoutingBudget}" pool. Tool calling may fail. Try budget="auto" or "premium".`;
         console.warn(`[Smart Router] ${agenticWarning} (topic=${topic})`);
       }
     }
@@ -956,6 +1012,11 @@ app.post("/v1/chat/completions", async (c) => {
         })
       : null;
 
+    const requestTools = Array.isArray(body.tools) ? (body.tools as unknown[]) : undefined;
+    const requestToolChoice = (body as { tool_choice?: unknown }).tool_choice;
+    const requestParallelToolCalls = (body as { parallel_tool_calls?: unknown }).parallel_tool_calls;
+    const toolCallRequired = shouldEnforceToolCall(messages, !!requestTools?.length, requestToolChoice, complexity.isAgentic);
+
     // Failover chain: try up to 3 models
     const MAX_FAILOVER_ATTEMPTS = Math.min(healthyModels.length, 3);
     let lastError: Error | null = null;
@@ -981,6 +1042,9 @@ app.post("/v1/chat/completions", async (c) => {
               messages: body.messages as any,
               temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
               max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+              tools: requestTools as any,
+              tool_choice: requestToolChoice as any,
+              parallel_tool_calls: requestParallelToolCalls as any,
               stream: true,
             },
             c.env
@@ -1032,11 +1096,14 @@ app.post("/v1/chat/completions", async (c) => {
           }
           const stream = await openai.chat.completions.create({
             model: model.id,
-            messages: body.messages as any,
-            temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
-            max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
-            stream: true,
-          });
+              messages: body.messages as any,
+              temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
+              max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+              tools: requestTools as any,
+              tool_choice: requestToolChoice as any,
+              parallel_tool_calls: requestParallelToolCalls as any,
+              stream: true,
+            });
 
           const encoder = new TextEncoder();
           const readable = new ReadableStream({
@@ -1153,6 +1220,9 @@ app.post("/v1/chat/completions", async (c) => {
               messages: body.messages as any,
               temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
               max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+              tools: requestTools as any,
+              tool_choice: requestToolChoice as any,
+              parallel_tool_calls: requestParallelToolCalls as any,
             },
             c.env
           );
@@ -1168,9 +1238,23 @@ app.post("/v1/chat/completions", async (c) => {
               messages: body.messages as any,
               temperature: typeof body.temperature === 'number' ? body.temperature : undefined,
               max_tokens: typeof body.max_tokens === 'number' ? body.max_tokens : undefined,
+              tools: requestTools as any,
+              tool_choice: requestToolChoice as any,
+              parallel_tool_calls: requestParallelToolCalls as any,
             }) as any;
           } else {
             throw new Error(`No provider available for ${model.id} (no OpenRouter key and direct provider returned null)`);
+          }
+
+          // Quality guard: for explicit tool workflows, retry another model when no tool call is emitted.
+          const firstChoice = (completion as { choices?: Array<{ message?: { tool_calls?: unknown[]; content?: unknown }; finish_reason?: unknown }> }).choices?.[0];
+          const toolCalls = Array.isArray(firstChoice?.message?.tool_calls) ? firstChoice?.message?.tool_calls : [];
+          if (toolCallRequired && toolCalls.length === 0) {
+            const finishReason = typeof firstChoice?.finish_reason === "string" ? firstChoice.finish_reason : "unknown";
+            const contentPreview = typeof firstChoice?.message?.content === "string"
+              ? firstChoice.message.content.slice(0, 120).replace(/\s+/g, " ")
+              : "";
+            throw new Error(`No tool calls emitted for a tool-required request (finish_reason=${finishReason}, preview="${contentPreview}")`);
           }
 
           const latency = Date.now() - startTime;
@@ -1317,6 +1401,7 @@ app.post("/v1/chat/completions", async (c) => {
               candidate_models: candidateModelIds,
               is_agentic: complexity.isAgentic,
               ...(agenticFiltered && { agentic_filter_applied: true }),
+              ...(agenticTier && { agentic_tier: agenticTier }),
               ...(agenticWarning && { agentic_warning: agenticWarning }),
               ...(agentStep.complexityTier && { agent_step_override: agentStep.complexityTier }),
               ...(estimatedCostUsd !== undefined && { estimated_cost_usd: estimatedCostUsd }),
