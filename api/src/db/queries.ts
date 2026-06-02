@@ -28,12 +28,27 @@ const COMPLEXITY_WEIGHTS: Record<ComplexityTier, { quality: number; value: numbe
   REASONING: { quality: 0.9, value: 0.1 },
 };
 
-function getBudgetFilter(budget: RoutingBudget): string {
+function getBudgetFilter(budget: RoutingBudget, complexity: ComplexityTier): string {
   // Free is a hard constraint. Paid budgets are preferences handled in ranking.
   if (budget === "free") {
     return " AND m.is_free = 1";
   }
-  return " AND m.is_free = 0";
+
+  let clause = " AND m.is_free = 0";
+
+  // Margin guard: cap output price by complexity tier unless budget=premium.
+  // Without this, MEDIUM/COMPLEX routes can pick Sonnet/GPT-5/Opus and lose money.
+  if (budget !== "premium") {
+    const maxOutputPrice: Record<ComplexityTier, number> = {
+      SIMPLE: 1.0,
+      MEDIUM: 2.0,
+      COMPLEX: 5.0,
+      REASONING: 5.0,
+    };
+    clause += ` AND m.output_price_per_1m < ${maxOutputPrice[complexity]}`;
+  }
+
+  return clause;
 }
 
 function getReasoningFilter(complexity: ComplexityTier): string {
@@ -115,7 +130,7 @@ async function queryBestModel(
       AND m.is_available = 1
   `;
 
-  query += getBudgetFilter(budget);
+  query += getBudgetFilter(budget, complexity);
   query += getReasoningFilter(complexity);
   query += ` ORDER BY (cs.quality_score * ? + cs.value_score * ?) DESC LIMIT 1`;
 
@@ -179,7 +194,7 @@ async function queryModelsForDomain(
       AND m.is_available = 1
   `;
 
-  query += getBudgetFilter(budget);
+  query += getBudgetFilter(budget, complexity);
   query += getReasoningFilter(complexity);
   query += ` ORDER BY (cs.quality_score * ? + cs.value_score * ?) DESC LIMIT 10`;
 

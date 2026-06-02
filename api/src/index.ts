@@ -16,6 +16,7 @@ import { callDirectProvider, getProviderName, isDirectProviderAvailable } from "
 import OpenAI from "openai";
 import {
   PRICE_BY_TIER,
+  PRICE_BY_TIER_COUNCIL,
   buildMppWwwAuthenticate,
   createMppx,
   hasMppCredential,
@@ -109,18 +110,34 @@ function normalizeRoutingBudget(rawBudget: string | undefined, authTier: string)
   return _normalizeRoutingBudget(rawBudget || defaultBudget);
 }
 
-function getChargedPriceUsd(authTier: string, budget: string, complexityTier: string): number {
-  if (authTier === "paid") return 0.002;
+function getChargedPriceUsd(
+  authTier: string,
+  budget: string,
+  complexityTier: string,
+  mode: "default" | "council" = "default"
+): number {
+  const multiplier = mode === "council" ? 5 : 1;
+
+  if (authTier === "paid") return 0.002 * multiplier;
 
   // x402/mpp path: variable pricing based on complexity (TASK-59)
   if (authTier === "x402" || authTier === "mpp" || (authTier === "free" && budget !== "free")) {
+    const normalizedBudget = (budget || "auto").toLowerCase();
+    const isPremium = normalizedBudget === "premium" || normalizedBudget === "high";
+
+    // Premium budget unlocks PREMIUM tier pricing for expensive complexity routes,
+    // covering frontier models (Sonnet 4.5, Opus, GPT-5) that exceed $5/1M output.
+    if (isPremium && (complexityTier === "COMPLEX" || complexityTier === "REASONING")) {
+      return 0.015 * multiplier;
+    }
+
     const priceByTier: Record<string, number> = {
       SIMPLE: 0.001,
       MEDIUM: 0.002,
       COMPLEX: 0.005,
-      REASONING: 0.008,
+      REASONING: 0.012,
     };
-    return priceByTier[complexityTier] || 0.002;
+    return (priceByTier[complexityTier] || 0.002) * multiplier;
   }
 
   return 0;
@@ -352,10 +369,14 @@ app.use("/v1/chat/completions", async (c, next) => {
       complexityTier = maxComplexityTier(complexityTier, "MEDIUM");
     }
 
+    const rawMode = typeof body.mode === "string" ? body.mode.toLowerCase() : "default";
+    const requestMode: "default" | "council" = rawMode === "council" ? "council" : "default";
+
     c.set("parsedBody" as never, body as never);
     c.set("complexityTier" as never, complexityTier as never);
     c.set("tokenEstimate" as never, totalTokenEstimate as never);
     c.set("hasToolsArray" as never, hasToolsArray as never);
+    c.set("requestMode" as never, requestMode as never);
   } catch {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
@@ -371,10 +392,20 @@ app.use("/v1/chat/completions", async (c, next) => {
   }
 
   // Complexity-based price — shared between MPP and x402 rails (no divergence)
-  const price = PRICE_BY_TIER[complexityTier] ?? "$0.002";
-  const priceDescription = `ArcRouter - ${complexityTier} query. SIMPLE $0.001 / MEDIUM $0.002 / COMPLEX $0.005.`;
+  // Mode and budget both shift the price: council = 5x multiplier, premium budget = PREMIUM tier
+  const requestMode = (c.get("requestMode" as never) as "default" | "council") || "default";
+  const normalizedBudgetForPrice = (budget || "auto").toLowerCase();
+  const isPremiumBudget = normalizedBudgetForPrice === "premium" || normalizedBudgetForPrice === "high";
+  const effectiveTier: string = (isPremiumBudget && (complexityTier === "COMPLEX" || complexityTier === "REASONING"))
+    ? "PREMIUM"
+    : complexityTier;
 
-  console.log(`[Auth] Unauthenticated request budget="${budget}" complexity=${complexityTier} price=${price}`);
+  const tierTable = requestMode === "council" ? PRICE_BY_TIER_COUNCIL : PRICE_BY_TIER;
+  const price = tierTable[effectiveTier] ?? tierTable.MEDIUM;
+  const tierList = Object.entries(tierTable).map(([k, v]) => `${k} ${v}`).join(" / ");
+  const priceDescription = `ArcRouter - ${effectiveTier} query (${requestMode}). ${tierList}.`;
+
+  console.log(`[Auth] Unauthenticated request budget="${budget}" complexity=${complexityTier} mode=${requestMode} effectiveTier=${effectiveTier} price=${price}`);
 
   // ── MPP path ─────────────────────────────────────────────────────────────
   // Authorization: Payment <credential> header present → verify via mppx
@@ -1356,10 +1387,16 @@ app.post("/v1/chat/completions", async (c) => {
             responseHeaders['X-ArcRouter-Agent-Step'] = c.req.header("X-Agent-Step") || "";
           }
 
-          // Per-request log to D1 for dashboard (non-blocking)
+          // Per-request log to D1 for dashboard + margin reconciliation (non-blocking)
           if (c.env.SCORE_DB) {
             const { writeRoutingLog } = await import('./router/routing-log');
             const usage = (completion as { usage?: { prompt_tokens?: number; completion_tokens?: number } })?.usage;
+            const inTok = usage?.prompt_tokens;
+            const outTok = usage?.completion_tokens;
+            const actualCostUsd = (inTok !== undefined && outTok !== undefined)
+              ? parseFloat((((inTok / 1_000_000) * model.input_price) + ((outTok / 1_000_000) * model.output_price)).toFixed(6))
+              : estimatedCostUsd;
+            const chargedUsd = getChargedPriceUsd(authTier, effectiveRoutingBudget, complexity.tier, "default");
             c.executionCtx.waitUntil(
               writeRoutingLog(c.env.SCORE_DB, {
                 request_id: requestId,
@@ -1370,9 +1407,10 @@ app.post("/v1/chat/completions", async (c) => {
                 topic,
                 complexity_tier: complexity.tier,
                 latency_ms: Date.now() - requestStartedAt,
-                input_tokens: usage?.prompt_tokens,
-                output_tokens: usage?.completion_tokens,
-                cost_usd: estimatedCostUsd,
+                input_tokens: inTok,
+                output_tokens: outTok,
+                cost_usd: actualCostUsd,
+                charged_usd: chargedUsd,
                 call_path: usedDirectProvider ? `direct:${getProviderName(model.id)}` : 'openrouter',
                 status: 'success',
                 is_agentic: complexity.isAgentic,
@@ -1405,7 +1443,7 @@ app.post("/v1/chat/completions", async (c) => {
               ...(agenticWarning && { agentic_warning: agenticWarning }),
               ...(agentStep.complexityTier && { agent_step_override: agentStep.complexityTier }),
               ...(estimatedCostUsd !== undefined && { estimated_cost_usd: estimatedCostUsd }),
-              charged_cost_usd: getChargedPriceUsd(authTier, effectiveRoutingBudget, complexity.tier),
+              charged_cost_usd: getChargedPriceUsd(authTier, effectiveRoutingBudget, complexity.tier, "default"),
               ...(savingsVsGpt4 !== undefined && { savings_vs_gpt4_pct: savingsVsGpt4 }),
               ...(sessionId && { session_pinned: dataSource === 'session_pin' }),
               ...(workflowBudgetRemaining !== null && { workflow_budget_remaining_usd: workflowBudgetRemaining }),
@@ -1472,7 +1510,7 @@ app.post("/v1/chat/completions", async (c) => {
     console.log(`[Monitoring] runConsensus:done request_id=${requestId} latency_ms=${consensusLatencyMs} total_ms=${totalLatencyMs}`);
 
     const estimatedTotalCostUsd = result.monitoring?.estimatedTotalCostUsd ?? 0;
-    const chargedPriceUsd = getChargedPriceUsd(authTier, routingBudget, complexity.tier);
+    const chargedPriceUsd = getChargedPriceUsd(authTier, routingBudget, complexity.tier, "council");
     const marginAlert = estimatedTotalCostUsd > chargedPriceUsd;
 
     // 52a/52c/52d/52e monitoring metrics
@@ -1798,13 +1836,13 @@ app.get("/openapi.json", cors(), (c) => {
               {
                 method: "tempo",
                 intent: "charge",
-                pricing: PRICE_BY_TIER,
+                pricing: { default: PRICE_BY_TIER, council: PRICE_BY_TIER_COUNCIL },
                 chain: "tempo-mainnet",
                 header: "Authorization: Payment <credential>",
               },
               {
                 method: "x402",
-                pricing: PRICE_BY_TIER,
+                pricing: { default: PRICE_BY_TIER, council: PRICE_BY_TIER_COUNCIL },
                 chain: "base-mainnet",
                 header: "X-PAYMENT <credential>",
               },
@@ -2659,46 +2697,63 @@ app.all("/mcp", async (c) => {
   return handleMCPRequest(c.req.raw, c.env);
 });
 
-// Export with scheduled handler for cron trigger
+// Export with scheduled handler for cron trigger.
+// Each phase is independently wrapped so a failure in one (e.g. a timed-out
+// scraper) does NOT prevent later phases (most importantly: composite-score
+// recalc) from running. Prevents the "rankings page stale for weeks because
+// one scraper threw" failure mode we hit in May 2026.
 export default {
   fetch: app.fetch,
   scheduled: async (event: ScheduledEvent, env: CloudflareBindings, ctx: ExecutionContext) => {
-    console.log('[Cron] Running scheduled benchmark synchronization...');
+    console.log('[Cron] Starting daily pipeline');
 
+    // Phase A — pricing scrape (slow, network-bound, may fail)
     try {
-      // 1. Sync pricing from OpenRouter (updates all models)
       const { scrapeOpenRouterPricing } = await import('./db/scrapers/openrouter-pricing');
       await scrapeOpenRouterPricing(env.SCORE_DB, env.OPENROUTER_API_KEY);
+      console.log('[Cron] Phase A: pricing sync OK');
+    } catch (err) {
+      console.error('[Cron] Phase A: pricing sync FAILED:', err instanceof Error ? err.message : String(err));
+    }
 
-      // 2. Run orchestrator: all scrapers + synthetic scores + recalculation
+    // Phase B — benchmark scrapers + synthetic scores + internal recalc
+    try {
       const { syncAllBenchmarks } = await import('./db/scrapers/orchestrator');
       const result = await syncAllBenchmarks(env.SCORE_DB);
-
       console.log(
-        `[Cron] Benchmark sync complete: ${result.total_scores_updated} scores updated, ` +
-        `${result.composite_scores_calculated} composite scores calculated`
+        `[Cron] Phase B: scrapers OK — ${result.total_scores_updated} scores, ` +
+        `${result.composite_scores_calculated} composite. Errors: ${result.errors.length}`
       );
+    } catch (err) {
+      console.error('[Cron] Phase B: scrapers FAILED:', err instanceof Error ? err.message : String(err));
+    }
 
-      if (result.errors.length > 0) {
-        console.error(`[Cron] Errors encountered: ${result.errors.length}`);
-        for (const error of result.errors.slice(0, 10)) {
-          console.error(`[Cron] ${error}`);
-        }
-      }
+    // Phase C — UNCONDITIONAL composite-score recalc.
+    // This runs even if Phase A/B failed, so the rankings page is never more
+    // than 24h stale on the calculation side (benchmark data may be stale,
+    // but the score blend always reflects current models + pricing in D1).
+    try {
+      const { recalculateScores } = await import('./db/score-calculator');
+      await recalculateScores(env.SCORE_DB);
+      console.log('[Cron] Phase C: composite-score recalc OK');
+    } catch (err) {
+      console.error('[Cron] Phase C: recalc FAILED:', err instanceof Error ? err.message : String(err));
+    }
 
-      // 3. Flush telemetry data from KV to D1
+    // Phase D — telemetry flush + route-cache invalidation (best-effort)
+    try {
       const { RoutingTelemetry } = await import('./router/telemetry');
       const telemetry = new RoutingTelemetry(env.CONSENSUS_CACHE);
       await telemetry.flushToD1(env.SCORE_DB);
 
-      // 4. Invalidate route cache (scores changed, cached routes may be stale)
       const { RouteCache } = await import('./router/route-cache');
       const routeCache = new RouteCache(env.CONSENSUS_CACHE);
       await routeCache.invalidateAll();
-
-      console.log('[Cron] Pipeline complete');
+      console.log('[Cron] Phase D: telemetry + cache invalidation OK');
     } catch (err) {
-      console.error('[Cron] Pipeline failed:', err instanceof Error ? err.message : String(err));
+      console.error('[Cron] Phase D: telemetry/cache FAILED:', err instanceof Error ? err.message : String(err));
     }
+
+    console.log('[Cron] Pipeline finished');
   }
 };

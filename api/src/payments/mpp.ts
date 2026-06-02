@@ -5,11 +5,23 @@ import type { CloudflareBindings } from "../types";
 // Shared price schedule — single source of truth for both MPP and x402 rails.
 // Keeping parity prevents arbitrage between payment methods.
 // x402 format: "$0.001" (dollar prefix). MPP format: "0.001" (plain decimal).
+// Council mode multiplies these by COUNCIL_PRICE_MULTIPLIER (3 models + chairman).
 export const PRICE_BY_TIER: Record<string, string> = {
   SIMPLE: "$0.001",
   MEDIUM: "$0.002",
   COMPLEX: "$0.005",
-  REASONING: "$0.008", // must match getChargedPriceUsd in index.ts (fixed in P5.25)
+  REASONING: "$0.012",
+  PREMIUM: "$0.015",
+};
+
+export const COUNCIL_PRICE_MULTIPLIER = 5;
+
+export const PRICE_BY_TIER_COUNCIL: Record<string, string> = {
+  SIMPLE: "$0.005",
+  MEDIUM: "$0.010",
+  COMPLEX: "$0.025",
+  REASONING: "$0.060",
+  PREMIUM: "$0.075",
 };
 
 // Convert x402 price format ("$0.001") to MPP amount format ("0.001")

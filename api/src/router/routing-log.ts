@@ -19,6 +19,7 @@ export interface RoutingLogEntry {
   input_tokens?: number;
   output_tokens?: number;
   cost_usd?: number;
+  charged_usd?: number;
   call_path?: string;
   status: "success" | "error" | "fallback";
   is_agentic?: boolean;
@@ -36,9 +37,9 @@ export async function writeRoutingLog(
         `INSERT INTO routing_log (
           id, request_id, timestamp, api_key_hash, auth_tier,
           model_id, topic, complexity_tier, latency_ms,
-          input_tokens, output_tokens, cost_usd,
+          input_tokens, output_tokens, cost_usd, charged_usd,
           call_path, status, is_agentic, mode, session_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         crypto.randomUUID(),
@@ -53,6 +54,7 @@ export async function writeRoutingLog(
         entry.input_tokens ?? null,
         entry.output_tokens ?? null,
         entry.cost_usd ?? null,
+        entry.charged_usd ?? null,
         entry.call_path ?? null,
         entry.status,
         entry.is_agentic ? 1 : 0,

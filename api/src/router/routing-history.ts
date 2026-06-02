@@ -23,6 +23,12 @@ export interface RoutingHistoryEntry {
   success: boolean;
   failover_count: number;
   created_at: string;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cost_usd_actual?: number | null;
+  charged_usd?: number | null;
+  mode?: "default" | "council" | null;
+  auth_tier?: string | null;
 }
 
 /**
@@ -38,8 +44,9 @@ export async function logRoutingDecision(
       .prepare(
         `INSERT INTO routing_history (
           request_id, topic, topic_confidence, complexity, budget,
-          selected_model, data_source, latency_ms, success, failover_count, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          selected_model, data_source, latency_ms, success, failover_count, created_at,
+          input_tokens, output_tokens, cost_usd_actual, charged_usd, mode, auth_tier
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .bind(
         entry.request_id,
@@ -52,7 +59,13 @@ export async function logRoutingDecision(
         entry.latency_ms,
         entry.success ? 1 : 0,
         entry.failover_count,
-        entry.created_at
+        entry.created_at,
+        entry.input_tokens ?? null,
+        entry.output_tokens ?? null,
+        entry.cost_usd_actual ?? null,
+        entry.charged_usd ?? null,
+        entry.mode ?? null,
+        entry.auth_tier ?? null
       )
       .run();
 

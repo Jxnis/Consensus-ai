@@ -33,18 +33,18 @@ export class CouncilSelector {
   ): ModelInfo[] {
     const { budget } = request;
 
-    // TASK-A3: Budget filtering (removed MAX_MODEL_PRICE ceiling — let budget handle it)
-    // CRITICAL FIX: Exclude free models when budget is NOT "free" to avoid rate limits
+    // Council margin guard: tighter price caps than default mode because we
+    // run N models in parallel. Sonnet/Opus/GPT-5 only allowed at "high"/premium.
     let candidates: ModelInfo[];
     if (budget === "free") {
       candidates = allModels.filter(m => m.isFree);
     } else if (budget === "low") {
       candidates = allModels.filter(m => !m.isFree && m.pricePer1M < 0.5);
     } else if (budget === "medium") {
-      candidates = allModels.filter(m => !m.isFree && m.pricePer1M < 5.0);
+      candidates = allModels.filter(m => !m.isFree && m.pricePer1M < 2.0);
     } else {
-      // "high" — use all models except premium ($10+)
-      candidates = allModels.filter(m => !m.isFree && m.pricePer1M < 10.0);
+      // "high"/premium — unlocks everything including frontier models
+      candidates = allModels.filter(m => !m.isFree);
     }
 
     // TASK-A3: Quality-ranked selection
