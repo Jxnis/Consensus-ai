@@ -232,7 +232,7 @@ const PlaygroundNew = () => {
         >
           <button
             onClick={() => handleModeSwitch("route")}
-            className={`flex-1 font-mono text-[10px] tracking-[0.2em] uppercase px-6 py-3 border transition-all duration-300 ${
+            className={`flex-1 font-mono text-[10px] tracking-[0.2em] uppercase px-6 py-3 border transition-all duration-300 cursor-pointer ${
               mode === "route"
                 ? "bg-foreground text-background border-foreground"
                 : "bg-transparent text-muted-foreground border-border hover:border-foreground/50"
@@ -242,7 +242,7 @@ const PlaygroundNew = () => {
           </button>
           <button
             onClick={() => handleModeSwitch("council")}
-            className={`flex-1 font-mono text-[10px] tracking-[0.2em] uppercase px-6 py-3 border border-l-0 transition-all duration-300 ${
+            className={`flex-1 font-mono text-[10px] tracking-[0.2em] uppercase px-6 py-3 border border-l-0 transition-all duration-300 cursor-pointer ${
               mode === "council"
                 ? "bg-foreground text-background border-foreground"
                 : "bg-transparent text-muted-foreground border-border hover:border-foreground/50"
@@ -285,7 +285,7 @@ const PlaygroundNew = () => {
           <button
             onClick={handleRun}
             disabled={phase !== 'idle' || !prompt.trim()}
-            className="font-mono text-[11px] tracking-[0.15em] uppercase px-8 py-4 bg-foreground text-background border border-foreground transition-all duration-500 hover:tracking-[0.3em] disabled:opacity-30 disabled:hover:tracking-[0.15em]"
+            className="font-mono text-[11px] tracking-[0.15em] uppercase px-8 py-4 bg-foreground text-background border border-foreground transition-all duration-500 hover:tracking-[0.3em] disabled:opacity-30 disabled:hover:tracking-[0.15em] cursor-pointer disabled:cursor-not-allowed"
           >
             {phase === 'thinking'
               ? <Loader2 className="w-4 h-4 animate-spin" />

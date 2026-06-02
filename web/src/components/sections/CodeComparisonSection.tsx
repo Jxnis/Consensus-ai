@@ -87,7 +87,7 @@ const CodeComparisonSection = () => {
           <div className="flex border-b border-border">
             <button
               onClick={() => setActiveTab("single")}
-              className={`flex-1 font-mono text-[11px] tracking-wide py-3 transition-colors duration-300 ${
+              className={`flex-1 font-mono text-[11px] tracking-wide py-3 transition-colors duration-300 cursor-pointer ${
                 activeTab === "single"
                   ? "text-foreground border-b-2 border-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -97,7 +97,7 @@ const CodeComparisonSection = () => {
             </button>
             <button
               onClick={() => setActiveTab("consensus")}
-              className={`flex-1 font-mono text-[11px] tracking-wide py-3 transition-colors duration-300 ${
+              className={`flex-1 font-mono text-[11px] tracking-wide py-3 transition-colors duration-300 cursor-pointer ${
                 activeTab === "consensus"
                   ? "text-foreground border-b-2 border-foreground"
                   : "text-muted-foreground hover:text-foreground"

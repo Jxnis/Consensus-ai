@@ -3,9 +3,16 @@
 import { ThemeProvider } from "@/components/ThemeProvider";
 import NavigationNew from "@/components/sections/NavigationNew";
 import HeroNew from "@/components/sections/HeroNew";
-import QuickStartSection from "@/components/sections/QuickStartSection";
-import HowItWorksNew from "@/components/sections/HowItWorksNew";
 import StatsSection from "@/components/sections/StatsSection";
+import QuickStartSection from "@/components/sections/QuickStartSection";
+import IntegrationsSection from "@/components/sections/IntegrationsSection";
+import HowItWorksNew from "@/components/sections/HowItWorksNew";
+import OnChainPaymentsSection from "@/components/sections/OnChainPaymentsSection";
+import AgentWorkflowsSection from "@/components/sections/AgentWorkflowsSection";
+import CouncilSection from "@/components/sections/CouncilSection";
+import BenchmarksSection from "@/components/sections/BenchmarksSection";
+import PartnersSection from "@/components/sections/PartnersSection";
+import UseCasesSection from "@/components/sections/UseCasesSection";
 import CodeComparisonSection from "@/components/sections/CodeComparisonSection";
 import AbstractCirclesSection from "@/components/sections/AbstractCirclesSection";
 import PlaygroundNew from "@/components/sections/PlaygroundNew";
@@ -18,9 +25,16 @@ export default function LandingPage() {
        <main className="bg-background min-h-screen selection:bg-foreground selection:text-background transition-colors duration-500 overflow-x-hidden">
         <NavigationNew />
         <HeroNew />
-        <QuickStartSection />
-        <HowItWorksNew />
         <StatsSection />
+        <QuickStartSection />
+        <IntegrationsSection />
+        <HowItWorksNew />
+        <OnChainPaymentsSection />
+        <BenchmarksSection />
+        <AgentWorkflowsSection />
+        <CouncilSection />
+        <PartnersSection />
+        <UseCasesSection />
         <CodeComparisonSection />
         <AbstractCirclesSection />
         <PlaygroundNew />

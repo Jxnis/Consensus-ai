@@ -229,30 +229,30 @@ const client = createOpenAI({ baseURL: "${apiUrl}" });
                     </div>
 
                     <div className="p-6 border border-border rounded-xl bg-card">
-                        <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
-                            <span className="text-blue-500 text-xs font-bold">02</span>
-                        </div>
-                        <h3 className="font-heading text-lg mb-2">API Key</h3>
-                        <p className="text-sm text-muted-foreground mb-4">Stripe metered billing. $0.002/request. 1,000 req/hour.</p>
-                        <code className="text-xs bg-muted px-2 py-1 rounded">Authorization: Bearer sk_...</code>
-                    </div>
-
-                    <div className="p-6 border border-border rounded-xl bg-card">
                         <div className="w-8 h-8 rounded-full bg-violet-500/10 flex items-center justify-center mb-4">
-                            <span className="text-violet-500 text-xs font-bold">03</span>
+                            <span className="text-violet-500 text-xs font-bold">02</span>
                         </div>
-                        <h3 className="font-heading text-lg mb-2">x402 (Base USDC)</h3>
-                        <p className="text-sm text-muted-foreground mb-4">Pay per request with USDC on Base. Variable pricing by complexity. Ideal for agent-to-agent payments — no account needed.</p>
-                        <code className="text-xs bg-muted px-2 py-1 rounded">X-PAYMENT header (auto)</code>
+                        <h3 className="font-heading text-lg mb-2">MPP (Tempo)</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Machine Payments Protocol on Tempo (USDC.e). Sub-cent fees, ~500ms finality. Built by Tempo + Stripe. <code className="text-[10px] bg-muted px-1 rounded">npm i mppx</code></p>
+                        <code className="text-xs bg-muted px-2 py-1 rounded">Authorization: Payment ...</code>
                     </div>
 
                     <div className="p-6 border border-border rounded-xl bg-card">
                         <div className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center mb-4">
-                            <span className="text-orange-500 text-xs font-bold">04</span>
+                            <span className="text-orange-500 text-xs font-bold">03</span>
                         </div>
-                        <h3 className="font-heading text-lg mb-2">MPP (Tempo)</h3>
-                        <p className="text-sm text-muted-foreground mb-4">Machine Payments Protocol on Tempo (USDC.e). Sub-cent fees, 500ms finality. Built by Tempo + Stripe. <code className="text-[10px] bg-muted px-1 rounded">npm i mppx</code></p>
-                        <code className="text-xs bg-muted px-2 py-1 rounded">Authorization: Payment ...</code>
+                        <h3 className="font-heading text-lg mb-2">x402 (Base USDC)</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Coinbase x402 spec. Pay per request with USDC on Base. Variable pricing by complexity. Ideal for agent-to-agent payments — no account needed.</p>
+                        <code className="text-xs bg-muted px-2 py-1 rounded">X-PAYMENT header (auto)</code>
+                    </div>
+
+                    <div className="p-6 border border-border rounded-xl bg-card">
+                        <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
+                            <span className="text-blue-500 text-xs font-bold">04</span>
+                        </div>
+                        <h3 className="font-heading text-lg mb-2">API Key</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Stripe metered billing. Coming soon — pre-register interest via the waitlist.</p>
+                        <code className="text-xs bg-muted px-2 py-1 rounded">Authorization: Bearer sk_...</code>
                     </div>
                 </div>
             </section>
@@ -889,21 +889,28 @@ opencode
                                 <td className="p-4 font-bold">Free</td>
                                 <td className="p-4 text-muted-foreground">None</td>
                                 <td className="p-4 text-muted-foreground">$0</td>
-                                <td className="p-4 text-muted-foreground">20 / hr</td>
-                                <td className="p-4 text-muted-foreground">Free only</td>
+                                <td className="p-4 text-muted-foreground">20 / hr per IP</td>
+                                <td className="p-4 text-muted-foreground">Free models only</td>
                             </tr>
                             <tr>
-                                <td className="p-4 font-bold text-foreground">API Key</td>
-                                <td className="p-4 text-muted-foreground">Bearer token</td>
-                                <td className="p-4 text-muted-foreground">$0.002 / req</td>
-                                <td className="p-4 text-muted-foreground">1,000 / hr</td>
+                                <td className="p-4 font-bold text-foreground">MPP</td>
+                                <td className="p-4 text-muted-foreground">USDC.e on Tempo</td>
+                                <td className="p-4 text-muted-foreground">$0.001–$0.015 / req</td>
+                                <td className="p-4 text-muted-foreground">1,000 / hr per wallet</td>
                                 <td className="p-4 text-muted-foreground">All budgets</td>
                             </tr>
                             <tr>
                                 <td className="p-4 font-bold">x402</td>
                                 <td className="p-4 text-muted-foreground">USDC on Base</td>
-                                <td className="p-4 text-muted-foreground">$0.001–$0.005</td>
-                                <td className="p-4 text-muted-foreground">Unlimited</td>
+                                <td className="p-4 text-muted-foreground">$0.001–$0.015 / req</td>
+                                <td className="p-4 text-muted-foreground">1,000 / hr per wallet</td>
+                                <td className="p-4 text-muted-foreground">All budgets</td>
+                            </tr>
+                            <tr>
+                                <td className="p-4 font-bold text-foreground">API Key</td>
+                                <td className="p-4 text-muted-foreground">Bearer token</td>
+                                <td className="p-4 text-muted-foreground">Coming soon</td>
+                                <td className="p-4 text-muted-foreground">1,000 / hr</td>
                                 <td className="p-4 text-muted-foreground">All budgets</td>
                             </tr>
                         </tbody>
@@ -911,9 +918,9 @@ opencode
                 </div>
 
                 <div className="bg-muted/30 border border-border rounded-xl p-6">
-                    <h3 className="font-heading text-lg mb-3 text-foreground">x402 Variable Pricing</h3>
+                    <h3 className="font-heading text-lg mb-3 text-foreground">Variable Pricing by Complexity</h3>
                     <p className="text-sm text-muted-foreground mb-4">
-                        x402 payments use variable pricing based on prompt complexity. Your prompt is automatically scored and the price is shown before you approve:
+                        Both MPP and x402 use identical tier-based pricing. Your prompt is classified automatically and the price is advertised in the 402 challenge before payment:
                     </p>
                     <div className="space-y-2 font-mono text-xs">
                         <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
@@ -930,11 +937,19 @@ opencode
                         </div>
                         <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
                             <span className="text-foreground">REASONING queries</span>
-                            <span className="text-muted-foreground">$0.008 / request</span>
+                            <span className="text-muted-foreground">$0.012 / request</span>
+                        </div>
+                        <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
+                            <span className="text-foreground">PREMIUM (budget=premium + COMPLEX/REASONING)</span>
+                            <span className="text-muted-foreground">$0.015 / request</span>
+                        </div>
+                        <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
+                            <span className="text-foreground">Council mode (mode=&quot;council&quot;)</span>
+                            <span className="text-muted-foreground">5x tier price</span>
                         </div>
                     </div>
                     <p className="text-sm text-muted-foreground mt-4">
-                        API Key users pay a flat $0.002/request via Stripe metered billing, invoiced monthly. x402 users pay per-request with USDC on Base Mainnet via the Coinbase CDP facilitator — ideal for autonomous agents and agent-to-agent payments.
+                        Both MPP (Tempo USDC.e) and x402 (Base USDC) rails are advertised in the same 402 challenge — your client picks whichever wallet it holds. Pricing parity prevents arbitrage. API Key tier (Stripe metered billing) is coming soon.
                     </p>
                 </div>
 

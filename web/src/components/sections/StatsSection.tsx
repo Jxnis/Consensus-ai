@@ -2,9 +2,9 @@ import { motion, useInView } from "motion/react";
 import { useRef, useState, useEffect } from "react";
 
 const stats = [
-  { label: "Models tracked", value: 345, suffix: "+", display: undefined, desc: "Daily pricing and benchmark updates from OpenRouter. Smart routing selects best value model per topic." },
-  { label: "Topic categories", value: 24, suffix: "", display: undefined, desc: "Granular detection: code/frontend, math/calculus, science/physics. Better routing accuracy than broad categories." },
-  { label: "Cost savings", value: 90, suffix: "%", display: undefined, desc: "Up to 90% cheaper than premium models by routing to the best model for each topic. Benchmark-verified quality at a fraction of the cost." },
+  { label: "Up to", value: 90, suffix: "%", display: undefined, desc: "Cost savings on routes that would otherwise hit a frontier model (Sonnet, Opus, GPT-5). The router picks the cheapest model that still passes the benchmark for that topic and complexity tier — no quality drop." },
+  { label: "Models scored", value: 345, suffix: "+", display: undefined, desc: "Prices refresh daily from OpenRouter. Quality scores blend LiveBench, LiveCodeBench, GPQA Diamond, and HuggingFace evals. No synthetic-only ranks at the top." },
+  { label: "Topic categories", value: 24, suffix: "", display: undefined, desc: "Granular routing: code/frontend, math/calculus, science/physics. Plus 4 complexity tiers and agentic detection — better than picking one model for everything." },
 ];
 
 const AnimatedNumber = ({ target, suffix, display }: { target: number; suffix: string; display?: string }) => {
@@ -41,11 +41,31 @@ const StatsSection = () => {
     <section className="py-32 px-8">
       <div className="max-w-[1200px] mx-auto">
         <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.8 }}
+          className="mb-20 max-w-3xl"
+        >
+          <span className="font-mono text-[10px] text-muted-foreground tracking-[0.3em] uppercase block mb-4">
+            Why ArcRouter
+          </span>
+          <h2 className="font-heading text-5xl md:text-7xl text-foreground tracking-[-0.03em] leading-[1.02]">
+            Save up to 90% on AI costs.
+          </h2>
+          <p className="font-mono text-[12px] text-muted-foreground leading-relaxed tracking-wide mt-6 max-w-xl">
+            Most prompts don&apos;t need a frontier model. ArcRouter classifies
+            every request by topic and complexity, then routes to the cheapest
+            model that still passes the quality bar. Same OpenAI-compatible
+            endpoint. Pay per call in USDC on Tempo or Base.
+          </p>
+        </motion.div>
+
+        <motion.div
           ref={ref}
           initial={{ opacity: 0 }}
           animate={inView ? { opacity: 1 } : {}}
           transition={{ duration: 0.8 }}
-          className="grid md:grid-cols-3 gap-0"
+          className="grid md:grid-cols-3 gap-0 border-t border-border"
         >
           {stats.map((stat, i) => (
             <motion.div

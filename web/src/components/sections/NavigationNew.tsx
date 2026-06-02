@@ -5,11 +5,12 @@ import ArcLogo from "../ArcLogo";
 import { useEffect, useState } from "react";
 
 const navLinks: { label: string; href: string; external?: boolean }[] = [
+  { label: "PRODUCTS", href: "/#products" },
   { label: "DOCS", href: "/docs" },
   { label: "RANKINGS", href: "/rankings" },
   { label: "RESEARCH", href: "/research" },
-  { label: "PRICING", href: "#pricing" },
-  { label: "PLAYGROUND", href: "#playground" },
+  { label: "ENTERPRISE", href: "/enterprise" },
+  { label: "PRICING", href: "/#pricing" },
   { label: "GITHUB", href: "https://github.com/ArcRouterAI", external: true },
 ];
 
@@ -109,13 +110,13 @@ const NavigationNew = () => {
       className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-background/70 border-b border-border/40"
     >
       <div className="max-w-[1400px] mx-auto px-8 h-16 flex items-center justify-between">
-        <a href="#" className="flex items-center gap-1 group">
+        <a href="/" className="flex items-center gap-1 group cursor-pointer">
             <ArcLogo className="w-12 h-12 text-foreground transition-transform duration-500 group-hover:rotate-180" />
-            
+
             <div className="font-heading font-bold text-lg tracking-tight flex items-center overflow-hidden h-6 min-w-[150px]">
-              <AnimatedTitle 
-                initialText="ArcRouter" 
-                finalText="AR" 
+              <AnimatedTitle
+                initialText="ArcRouter"
+                finalText="AR"
               />
             </div>
         </a>
@@ -136,7 +137,7 @@ const NavigationNew = () => {
 
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-full text-muted-foreground hover:text-foreground transition-colors duration-300"
+            className="p-2 rounded-full text-muted-foreground hover:text-foreground transition-colors duration-300 cursor-pointer"
             aria-label="Toggle theme"
           >
             <motion.div

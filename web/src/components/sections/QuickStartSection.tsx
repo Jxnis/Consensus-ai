@@ -65,7 +65,7 @@ const QuickStartSection = () => {
                           <button
                             key={tab.id}
                             onClick={() => { setActiveTab(tab.id); setCopied(false); }}
-                            className={`font-mono text-[10px] tracking-[0.15em] px-3 py-1 rounded-md uppercase transition-colors duration-200 ${
+                            className={`font-mono text-[10px] tracking-[0.15em] px-3 py-1 rounded-md uppercase transition-colors duration-200 cursor-pointer ${
                               activeTab === tab.id
                                 ? "bg-foreground text-background"
                                 : "text-muted-foreground hover:text-foreground"
@@ -92,7 +92,7 @@ const QuickStartSection = () => {
 
                     <button
                         onClick={handleCopy}
-                        className="absolute right-4 bottom-4 md:static md:self-end px-5 py-2.5 bg-muted hover:bg-muted/80 border border-border rounded-lg text-xs font-mono text-foreground transition-colors flex items-center gap-2"
+                        className="absolute right-4 bottom-4 md:static md:self-end px-5 py-2.5 bg-muted hover:bg-muted/80 border border-border rounded-lg text-xs font-mono text-foreground transition-colors flex items-center gap-2 cursor-pointer"
                     >
                         {copied ? <Check size={14} className="text-green-600 dark:text-green-500" /> : <Copy size={14} />}
                         {copied ? 'Copied' : 'Copy'}

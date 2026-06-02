@@ -5,7 +5,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import ArcLogo from "@/components/ArcLogo";
 import { ArrowRight, Menu, X, ChevronUp, ChevronDown, Search } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://consensus-api.janis-ellerbrock.workers.dev";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.arcrouter.com";
 
 const DOMAINS = ["code", "math", "science", "writing", "reasoning", "general"] as const;
 type Domain = (typeof DOMAINS)[number];
