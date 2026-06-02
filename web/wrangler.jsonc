@@ -9,6 +9,6 @@
 		"binding": "ASSETS"
 	},
 	"vars": {
-		"NEXT_PUBLIC_API_URL": "https://consensus-api.janis-ellerbrock.workers.dev"
+		"NEXT_PUBLIC_API_URL": "https://api.arcrouter.com"
 	}
 }
