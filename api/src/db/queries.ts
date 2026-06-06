@@ -28,13 +28,28 @@ const COMPLEXITY_WEIGHTS: Record<ComplexityTier, { quality: number; value: numbe
   REASONING: { quality: 0.9, value: 0.1 },
 };
 
+// Models permanently excluded from auto-selection due to chronic issues
+// (severe latency, broken endpoints, persistent rate-limiting). Users can still
+// request these explicitly via model: "<id>" — only auto-routing skips them.
+// Must be code-level (not D1) because the daily OpenRouter pricing scraper
+// resets models.is_available to 1 on every run.
+const EXCLUDED_FROM_AUTO_ROUTING = [
+  'deepseek/deepseek-r1', // ~43s avg latency in routing_history, unusable in default flow
+];
+
+function getExclusionFilter(): string {
+  if (EXCLUDED_FROM_AUTO_ROUTING.length === 0) return '';
+  const list = EXCLUDED_FROM_AUTO_ROUTING.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+  return ` AND m.id NOT IN (${list})`;
+}
+
 function getBudgetFilter(budget: RoutingBudget, complexity: ComplexityTier): string {
   // Free is a hard constraint. Paid budgets are preferences handled in ranking.
   if (budget === "free") {
-    return " AND m.is_free = 1";
+    return " AND m.is_free = 1" + getExclusionFilter();
   }
 
-  let clause = " AND m.is_free = 0";
+  let clause = " AND m.is_free = 0" + getExclusionFilter();
 
   // Margin guard: cap output price by complexity tier unless budget=premium.
   // Without this, MEDIUM/COMPLEX routes can pick Sonnet/GPT-5/Opus and lose money.
