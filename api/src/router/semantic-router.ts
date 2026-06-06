@@ -157,7 +157,28 @@ export class SemanticRouter {
     complexity: ComplexityTier,
     limit: number
   ): Promise<Array<{ model_id: string; value_score: number; reliability_pct: number }>> {
-    const budgetFilter = budget === "free" ? " AND m.is_free = 1" : " AND m.is_free = 0";
+    // MUST match getBudgetFilter in db/queries.ts — semantic router was previously
+    // bypassing the exclude list + output_price caps, letting expensive models
+    // (gpt-5.2-codex, deepseek-r1) slip through margin guards on the embedding-rerank path.
+    const EXCLUDED_FROM_AUTO_ROUTING = ["deepseek/deepseek-r1"];
+    const excludeFilter = ` AND m.id NOT IN (${EXCLUDED_FROM_AUTO_ROUTING.map(id => `'${id.replace(/'/g, "''")}'`).join(',')})`;
+
+    let budgetFilter: string;
+    if (budget === "free") {
+      budgetFilter = " AND m.is_free = 1" + excludeFilter;
+    } else {
+      budgetFilter = " AND m.is_free = 0" + excludeFilter;
+      if (budget !== "premium") {
+        const maxOutputPrice: Record<ComplexityTier, number> = {
+          SIMPLE: 1.0,
+          MEDIUM: 2.0,
+          COMPLEX: 5.0,
+          REASONING: 5.0,
+        };
+        budgetFilter += ` AND m.output_price_per_1m < ${maxOutputPrice[complexity]}`;
+      }
+    }
+
     const reasoningFilter = complexity === "REASONING"
       ? ` AND (
           lower(m.id) LIKE '%o3%' OR

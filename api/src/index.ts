@@ -340,7 +340,12 @@ app.use("/v1/chat/completions", async (c, next) => {
       "gemini": "google/gemini-2.5-flash-lite-preview-09-2025",
       "gemini-pro": "google/gemini-2.5-pro",
       "deepseek": "deepseek/deepseek-chat-v3-0324",
+      "deepseek-chat": "deepseek/deepseek-chat-v3-0324",
+      "deepseek-v3": "deepseek/deepseek-chat-v3-0324",
+      "deepseek-flash": "deepseek/deepseek-v3.2",        // closest to "deepseek 4 flash" naming
+      "deepseek-v3.2": "deepseek/deepseek-v3.2",
       "deepseek-r1": "deepseek/deepseek-r1",
+      "deepseek-reasoner": "deepseek/deepseek-r1",
     };
     if (typeof body.model === "string" && MODEL_ALIASES[body.model.toLowerCase()]) {
       body = { ...body, model: MODEL_ALIASES[body.model.toLowerCase()] };
