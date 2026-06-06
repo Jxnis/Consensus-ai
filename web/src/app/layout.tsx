@@ -55,22 +55,13 @@ export const metadata: Metadata = {
     description: 'Smart routing across 345+ models. MPP + x402 USDC pay-per-call. Council verification. Workflow budgets. OpenAI SDK compatible. Built for agents.',
     url: 'https://arcrouter.com',
     siteName: 'ArcRouter',
-    images: [
-      {
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: 'ArcRouter — Agent-Native LLM Router',
-      },
-    ],
     locale: 'en_US',
     type: 'website',
   },
   twitter: {
-    card: 'summary_large_image',
+    card: 'summary',
     title: 'ArcRouter — Agent-Native LLM Router. Pay-per-call USDC.',
     description: 'Smart routing + MPP/x402 micropayments. Council verification. 345+ models. OpenAI SDK compatible.',
-    images: ['/og-image.png'],
   },
   alternates: {
     canonical: 'https://arcrouter.com',
