@@ -37,16 +37,29 @@ const EXCLUDED_FROM_AUTO_ROUTING = [
   'deepseek/deepseek-r1', // ~43s avg latency in routing_history, unusable in default flow
 ];
 
-function getExclusionFilter(): string {
-  if (EXCLUDED_FROM_AUTO_ROUTING.length === 0) return '';
-  const list = EXCLUDED_FROM_AUTO_ROUTING.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+// Free-tier specific exclusions: models that 429/timeout chronically on the
+// OpenRouter free endpoint. Empirically verified 2026-06-07 — re-test quarterly.
+// Excluding these means free tier picks a reliable model on first attempt
+// instead of failing and forcing client retries.
+const EXCLUDED_FROM_FREE_TIER = [
+  'openrouter/free',                          // meta-aggregator, perpetually timed out
+  'nvidia/nemotron-nano-12b-v2-vl:free',      // timeouts
+  'qwen/qwen3-coder:free',                    // timeouts
+  'qwen/qwen3-next-80b-a3b-instruct:free',    // timeouts
+  'meta-llama/llama-3.3-70b-instruct:free',   // timeouts despite being popular
+];
+
+function getExclusionFilter(extra: string[] = []): string {
+  const combined = [...EXCLUDED_FROM_AUTO_ROUTING, ...extra];
+  if (combined.length === 0) return '';
+  const list = combined.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
   return ` AND m.id NOT IN (${list})`;
 }
 
 function getBudgetFilter(budget: RoutingBudget, complexity: ComplexityTier): string {
   // Free is a hard constraint. Paid budgets are preferences handled in ranking.
   if (budget === "free") {
-    return " AND m.is_free = 1" + getExclusionFilter();
+    return " AND m.is_free = 1" + getExclusionFilter(EXCLUDED_FROM_FREE_TIER);
   }
 
   let clause = " AND m.is_free = 0" + getExclusionFilter();

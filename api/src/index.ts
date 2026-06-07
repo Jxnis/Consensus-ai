@@ -757,17 +757,22 @@ app.post("/v1/chat/completions", async (c) => {
     const desiredCandidateCount = complexity.isAgentic ? 10 : 3;
     const routeCacheTopic = `${effectiveTopic}|${complexity.tier}|${complexity.isAgentic ? "agentic" : "standard"}`;
 
-    // Get candidate models from D1 for failover chain
-    // First check cache to skip D1 query (unless bypass requested)
+    // Get candidate models from D1 for failover chain.
+    // Route cache is safe for lexical/database routing, but NOT for semantic routing:
+    // semantic selection depends on the exact prompt embedding, while this cache key
+    // is only topic|complexity|agentic|budget. Caching semantic results here would
+    // make the first prompt in a bucket control unrelated prompts for up to 1 hour.
     const bypassCache = body.bypass_cache === true;
+    const semanticRoutingEnabled = c.env.SEMANTIC_ROUTING_ENABLED === 'true';
+    const shouldUseRouteCache = !semanticRoutingEnabled && !bypassCache;
     let candidateModels: Array<{ id: string; name: string; provider: string; input_price: number; output_price: number }> = [];
     let dataSource = 'fallback_registry';
 
     try {
       if (c.env.SCORE_DB) {
         // Check cache first (saves ~4ms D1 query)
-        const cacheVersion = bypassCache ? null : await routeCache.getCacheVersion();
-        const cachedModelId = bypassCache ? null : await routeCache.getCachedRouteWithVersion(routeCacheTopic, effectiveRoutingBudget, cacheVersion);
+        const cacheVersion = shouldUseRouteCache ? await routeCache.getCacheVersion() : null;
+        const cachedModelId = shouldUseRouteCache ? await routeCache.getCachedRouteWithVersion(routeCacheTopic, effectiveRoutingBudget, cacheVersion) : null;
 
         if (cachedModelId) {
           // Cache hit! Use cached model as primary candidate
@@ -796,7 +801,6 @@ app.post("/v1/chat/completions", async (c) => {
         // Cache miss or cached model not found - query D1
         if (candidateModels.length === 0) {
           // Try semantic routing if enabled
-          const semanticRoutingEnabled = c.env.SEMANTIC_ROUTING_ENABLED === 'true';
           let semanticResult = null;
 
           if (semanticRoutingEnabled && c.env.AI && c.env.SCORE_DB) {
@@ -834,10 +838,9 @@ app.post("/v1/chat/completions", async (c) => {
                     candidateModels.push(...backupModels);
                   }
 
-                  // Cache the semantic result
-                  c.executionCtx.waitUntil(
-                    routeCache.cacheRoute(effectiveTopic, effectiveRoutingBudget, semanticResult.model_id, primaryModel.name)
-                  );
+                  // Do not route-cache semantic results. Semantic routing is prompt-specific;
+                  // this coarse cache key would reuse one prompt's selected model for
+                  // unrelated prompts in the same topic/complexity/budget bucket.
                 }
               }
             } catch (semanticErr) {
@@ -855,10 +858,13 @@ app.post("/v1/chat/completions", async (c) => {
               dataSource = semanticResult?.fallback_reason ? `database_fallback:${semanticResult.fallback_reason}` : 'database';
               console.log(`[Smart Router] D1 returned ${models.length} models, using top ${desiredCandidateCount} for failover chain`);
 
-              // Cache the top model for future requests (async, don't block)
-              c.executionCtx.waitUntil(
-                routeCache.cacheRoute(routeCacheTopic, effectiveRoutingBudget, models[0].id, models[0].name)
-              );
+              // Cache lexical/database routing only. Semantic-enabled deployments should
+              // re-run prompt-specific semantic ranking on each request.
+              if (shouldUseRouteCache) {
+                c.executionCtx.waitUntil(
+                  routeCache.cacheRoute(routeCacheTopic, effectiveRoutingBudget, models[0].id, models[0].name)
+                );
+              }
             }
           }
         }

@@ -161,13 +161,24 @@ export class SemanticRouter {
     // bypassing the exclude list + output_price caps, letting expensive models
     // (gpt-5.2-codex, deepseek-r1) slip through margin guards on the embedding-rerank path.
     const EXCLUDED_FROM_AUTO_ROUTING = ["deepseek/deepseek-r1"];
-    const excludeFilter = ` AND m.id NOT IN (${EXCLUDED_FROM_AUTO_ROUTING.map(id => `'${id.replace(/'/g, "''")}'`).join(',')})`;
+    const EXCLUDED_FROM_FREE_TIER = [
+      "openrouter/free",
+      "nvidia/nemotron-nano-12b-v2-vl:free",
+      "qwen/qwen3-coder:free",
+      "qwen/qwen3-next-80b-a3b-instruct:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+    ];
+
+    const buildExcludeFilter = (extra: string[] = []) => {
+      const combined = [...EXCLUDED_FROM_AUTO_ROUTING, ...extra];
+      return ` AND m.id NOT IN (${combined.map(id => `'${id.replace(/'/g, "''")}'`).join(',')})`;
+    };
 
     let budgetFilter: string;
     if (budget === "free") {
-      budgetFilter = " AND m.is_free = 1" + excludeFilter;
+      budgetFilter = " AND m.is_free = 1" + buildExcludeFilter(EXCLUDED_FROM_FREE_TIER);
     } else {
-      budgetFilter = " AND m.is_free = 0" + excludeFilter;
+      budgetFilter = " AND m.is_free = 0" + buildExcludeFilter();
       if (budget !== "premium") {
         const maxOutputPrice: Record<ComplexityTier, number> = {
           SIMPLE: 1.0,
