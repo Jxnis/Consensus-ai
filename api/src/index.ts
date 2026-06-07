@@ -125,9 +125,14 @@ function getChargedPriceUsd(
     const normalizedBudget = (budget || "auto").toLowerCase();
     const isPremium = normalizedBudget === "premium" || normalizedBudget === "high";
 
-    // Premium budget unlocks PREMIUM tier pricing for expensive complexity routes,
-    // covering frontier models (Sonnet 4.5, Opus, GPT-5) that exceed $5/1M output.
-    if (isPremium && (complexityTier === "COMPLEX" || complexityTier === "REASONING")) {
+    // P1 fix (2026-06-07): budget=premium ALWAYS charges PREMIUM tier price,
+    // regardless of detected complexity. Previously this only applied to
+    // COMPLEX/REASONING complexity, which let premium-budget MEDIUM-classified
+    // prompts pick frontier models (output_price > $5/1M) while being charged
+    // MEDIUM tier ($0.002) — real margin leak when frontier got selected.
+    // Trade: premium-budget users always pay $0.015 even on SIMPLE prompts.
+    // Documented in docs as "premium authorizes frontier routing AND premium price".
+    if (isPremium) {
       return 0.015 * multiplier;
     }
 
@@ -398,12 +403,13 @@ app.use("/v1/chat/completions", async (c, next) => {
 
   // Complexity-based price — shared between MPP and x402 rails (no divergence)
   // Mode and budget both shift the price: council = 5x multiplier, premium budget = PREMIUM tier
+  // P1 fix (2026-06-07): budget=premium ALWAYS resolves to PREMIUM tier (regardless of
+  // complexity). MUST match getChargedPriceUsd's premium branch — otherwise the 402
+  // challenge price diverges from routing.charged_cost_usd, producing a billing mismatch.
   const requestMode = (c.get("requestMode" as never) as "default" | "council") || "default";
   const normalizedBudgetForPrice = (budget || "auto").toLowerCase();
   const isPremiumBudget = normalizedBudgetForPrice === "premium" || normalizedBudgetForPrice === "high";
-  const effectiveTier: string = (isPremiumBudget && (complexityTier === "COMPLEX" || complexityTier === "REASONING"))
-    ? "PREMIUM"
-    : complexityTier;
+  const effectiveTier: string = isPremiumBudget ? "PREMIUM" : complexityTier;
 
   const tierTable = requestMode === "council" ? PRICE_BY_TIER_COUNCIL : PRICE_BY_TIER;
   const price = tierTable[effectiveTier] ?? tierTable.MEDIUM;

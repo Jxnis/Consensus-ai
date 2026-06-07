@@ -29,7 +29,7 @@ const plans = [
     features: [
       "SIMPLE $0.001  /  MEDIUM $0.002",
       "COMPLEX $0.005  /  REASONING $0.012",
-      "PREMIUM $0.015 (Sonnet, Opus, GPT-5)",
+      "budget=premium → flat $0.015 (frontier models)",
       "Council verification = 5x tier price",
       "MPP (Tempo) + x402 (Base) USDC",
       "1,000 req / hour per wallet",

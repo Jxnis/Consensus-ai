@@ -940,7 +940,7 @@ opencode
                             <span className="text-muted-foreground">$0.012 / request</span>
                         </div>
                         <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
-                            <span className="text-foreground">PREMIUM (budget=premium + COMPLEX/REASONING)</span>
+                            <span className="text-foreground">PREMIUM (any request with budget=premium)</span>
                             <span className="text-muted-foreground">$0.015 / request</span>
                         </div>
                         <div className="flex justify-between items-center p-3 bg-background rounded border border-border">
@@ -948,6 +948,10 @@ opencode
                             <span className="text-muted-foreground">5x tier price</span>
                         </div>
                     </div>
+                    <p className="text-sm text-muted-foreground mt-4">
+                        <span className="text-foreground">budget=&quot;auto&quot;</span> optimizes cost vs quality automatically — most prompts route to cheap models, complex prompts route to better ones, you pay the matching tier price.{" "}
+                        <span className="text-foreground">budget=&quot;premium&quot;</span> authorizes ArcRouter to pick frontier models (Sonnet 4.5, Opus, GPT-5) when useful and charges a flat $0.015 per request regardless of complexity. Use auto unless you specifically want premium models guaranteed.
+                    </p>
                     <p className="text-sm text-muted-foreground mt-4">
                         Both MPP (Tempo USDC.e) and x402 (Base USDC) rails are advertised in the same 402 challenge — your client picks whichever wallet it holds. Pricing parity prevents arbitrage. API Key tier (Stripe metered billing) is coming soon.
                     </p>
