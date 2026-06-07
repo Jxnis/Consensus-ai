@@ -2356,6 +2356,62 @@ app.post("/admin/invalidate-cache", async (c) => {
   }
 });
 
+// Admin: Cron status — read back all cron:phase:* heartbeats so operators
+// don't need to run `wrangler kv key get` for each phase manually.
+// Returns one entry per phase with ts/status/duration/error.
+app.get("/admin/cron-status", async (c) => {
+  const adminToken = c.req.header("X-Admin-Token");
+  if (!c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Admin endpoint disabled" }, 503);
+  }
+  if (adminToken !== c.env.ADMIN_TOKEN) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const phases = [
+    "cron_a_run",   // overall Cron A status
+    "recalc",       // Cron A · Phase 1 — composite_scores recalc
+    "pricing",      // Cron A · Phase 2 — OpenRouter pricing
+    "telemetry_cache", // Cron A · Phase 3 — telemetry flush + cache invalidation
+    "cron_b_run",   // overall Cron B status
+    "scrapers",     // Cron B · Phase 4 — benchmark scrapers
+  ];
+
+  const heartbeats: Record<string, unknown> = {};
+  for (const phase of phases) {
+    try {
+      const raw = await c.env.CONSENSUS_CACHE.get(`cron:phase:${phase}`);
+      heartbeats[phase] = raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      heartbeats[phase] = { error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  // Also surface composite_scores freshness as the ground-truth signal
+  let composite_scores_last_calculated: string | null = null;
+  let composite_scores_row_count: number | null = null;
+  if (c.env.SCORE_DB) {
+    try {
+      const row = await c.env.SCORE_DB
+        .prepare("SELECT MAX(last_calculated) AS newest, COUNT(*) AS n FROM composite_scores")
+        .first<{ newest: string | null; n: number }>();
+      composite_scores_last_calculated = row?.newest ?? null;
+      composite_scores_row_count = row?.n ?? null;
+    } catch {
+      // ignore, surfaced as nulls
+    }
+  }
+
+  return c.json({
+    now: new Date().toISOString(),
+    heartbeats,
+    composite_scores: {
+      last_calculated: composite_scores_last_calculated,
+      row_count: composite_scores_row_count,
+    },
+  });
+});
+
 // Admin: Sync all benchmarks (orchestrator) - runs all scrapers + synthetic + recalculation
 app.post("/admin/sync-all-benchmarks", async (c) => {
   const adminToken = c.req.header("X-Admin-Token");
@@ -2714,63 +2770,151 @@ app.all("/mcp", async (c) => {
   return handleMCPRequest(c.req.raw, c.env);
 });
 
-// Export with scheduled handler for cron trigger.
-// Each phase is independently wrapped so a failure in one (e.g. a timed-out
-// scraper) does NOT prevent later phases (most importantly: composite-score
-// recalc) from running. Prevents the "rankings page stale for weeks because
-// one scraper threw" failure mode we hit in May 2026.
+// Export with scheduled handler — SPLIT INTO TWO CRONS (P2 fix 2026-06-07).
+//
+// Background: the previous single cron at 06:00 UTC ran scrapers (~100s wall-clock)
+// BEFORE composite-score recalc. The worker hit a per-request limit (subrequest
+// count, wall-clock, or CPU) before reaching recalc, so composite_scores never
+// refreshed from the cron despite the daily benchmark_scores updates working.
+//
+// Fix: split into two scheduled triggers in wrangler.jsonc.
+//   Cron A (06:00 UTC) — critical fast work. Phase 1 (recalc) runs FIRST so it
+//     can never be killed by slower later phases. Uses yesterday's scraped
+//     benchmark data + whatever pricing is currently in D1 (today's pricing
+//     scrape runs AFTER recalc in Phase 2). Acceptable trade-off — the goal
+//     is "composite_scores never stale" not "freshest possible."
+//   Cron B (06:30 UTC) — slow scrapers only, isolated execution context.
+//     Passes skipRecalculation:true so the orchestrator's tail-end recalc
+//     does NOT fire — Cron A's Phase 1 is the single source of truth for
+//     composite_scores. New benchmark data from Cron B gets used by the
+//     NEXT day's Cron A recalc. Also skips three known-broken endpoints
+//     (chatbot_arena, bigcodebench, alpaca_eval) that 404 in production.
+//     Those scrapers remain available via /admin/sync-all-benchmarks.
+//
+// Per-phase heartbeats written to KV as `cron:phase:<name>` keys (7-day TTL)
+// so we can inspect post-hoc which phase ran, how long it took, and any error
+// without relying on live wrangler tail.
+async function writeCronHeartbeat(
+  kv: KVNamespace,
+  phase: string,
+  status: 'started' | 'ok' | 'failed',
+  extra: Record<string, unknown> = {}
+): Promise<void> {
+  try {
+    await kv.put(
+      `cron:phase:${phase}`,
+      JSON.stringify({ ts: new Date().toISOString(), status, ...extra }),
+      { expirationTtl: 7 * 24 * 60 * 60 }
+    );
+  } catch {
+    // Never fail the cron because heartbeat write failed.
+  }
+}
+
 export default {
   fetch: app.fetch,
-  scheduled: async (event: ScheduledEvent, env: CloudflareBindings, ctx: ExecutionContext) => {
-    console.log('[Cron] Starting daily pipeline');
+  scheduled: async (event: ScheduledEvent, env: CloudflareBindings, _ctx: ExecutionContext) => {
+    const cronExpr = event.cron;
+    console.log(`[Cron] Triggered: ${cronExpr}`);
 
-    // Phase A — pricing scrape (slow, network-bound, may fail)
-    try {
-      const { scrapeOpenRouterPricing } = await import('./db/scrapers/openrouter-pricing');
-      await scrapeOpenRouterPricing(env.SCORE_DB, env.OPENROUTER_API_KEY);
-      console.log('[Cron] Phase A: pricing sync OK');
-    } catch (err) {
-      console.error('[Cron] Phase A: pricing sync FAILED:', err instanceof Error ? err.message : String(err));
+    // ── Cron A (06:00 UTC) — critical fast work ────────────────────────────
+    if (cronExpr === "0 6 * * *") {
+      const startA = Date.now();
+      await writeCronHeartbeat(env.CONSENSUS_CACHE, 'cron_a_run', 'started', { cron: cronExpr });
+
+      // Phase 1: composite_scores recalc — FIRST, guaranteed to run
+      const tRecalc = Date.now();
+      try {
+        const { recalculateScores } = await import('./db/score-calculator');
+        await recalculateScores(env.SCORE_DB);
+        const ms = Date.now() - tRecalc;
+        await writeCronHeartbeat(env.CONSENSUS_CACHE, 'recalc', 'ok', { ms });
+        console.log(`[Cron A] Phase 1: recalc OK (${ms}ms)`);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        await writeCronHeartbeat(env.CONSENSUS_CACHE, 'recalc', 'failed', { ms: Date.now() - tRecalc, err: errMsg });
+        console.error(`[Cron A] Phase 1: recalc FAILED:`, errMsg);
+      }
+
+      // Phase 2: OpenRouter pricing scrape
+      const tPricing = Date.now();
+      try {
+        const { scrapeOpenRouterPricing } = await import('./db/scrapers/openrouter-pricing');
+        await scrapeOpenRouterPricing(env.SCORE_DB, env.OPENROUTER_API_KEY);
+        const ms = Date.now() - tPricing;
+        await writeCronHeartbeat(env.CONSENSUS_CACHE, 'pricing', 'ok', { ms });
+        console.log(`[Cron A] Phase 2: pricing OK (${ms}ms)`);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        await writeCronHeartbeat(env.CONSENSUS_CACHE, 'pricing', 'failed', { ms: Date.now() - tPricing, err: errMsg });
+        console.error(`[Cron A] Phase 2: pricing FAILED:`, errMsg);
+      }
+
+      // Phase 3: telemetry flush + route-cache invalidation (best-effort)
+      const tTelem = Date.now();
+      try {
+        const { RoutingTelemetry } = await import('./router/telemetry');
+        await new RoutingTelemetry(env.CONSENSUS_CACHE).flushToD1(env.SCORE_DB);
+        const { RouteCache } = await import('./router/route-cache');
+        await new RouteCache(env.CONSENSUS_CACHE).invalidateAll();
+        const ms = Date.now() - tTelem;
+        await writeCronHeartbeat(env.CONSENSUS_CACHE, 'telemetry_cache', 'ok', { ms });
+        console.log(`[Cron A] Phase 3: telemetry+cache OK (${ms}ms)`);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        await writeCronHeartbeat(env.CONSENSUS_CACHE, 'telemetry_cache', 'failed', { ms: Date.now() - tTelem, err: errMsg });
+        console.error(`[Cron A] Phase 3: telemetry+cache FAILED:`, errMsg);
+      }
+
+      const totalA = Date.now() - startA;
+      await writeCronHeartbeat(env.CONSENSUS_CACHE, 'cron_a_run', 'ok', { total_ms: totalA, cron: cronExpr });
+      console.log(`[Cron A] Complete in ${totalA}ms`);
+      return;
     }
 
-    // Phase B — benchmark scrapers + synthetic scores + internal recalc
-    try {
-      const { syncAllBenchmarks } = await import('./db/scrapers/orchestrator');
-      const result = await syncAllBenchmarks(env.SCORE_DB);
-      console.log(
-        `[Cron] Phase B: scrapers OK — ${result.total_scores_updated} scores, ` +
-        `${result.composite_scores_calculated} composite. Errors: ${result.errors.length}`
-      );
-    } catch (err) {
-      console.error('[Cron] Phase B: scrapers FAILED:', err instanceof Error ? err.message : String(err));
+    // ── Cron B (06:30 UTC) — slow scrapers, best-effort ────────────────────
+    if (cronExpr === "30 6 * * *") {
+      const startB = Date.now();
+      await writeCronHeartbeat(env.CONSENSUS_CACHE, 'cron_b_run', 'started', { cron: cronExpr });
+
+      // Phase 4: orchestrator scrapers only.
+      // - skipScrapers: 3 chronically-broken endpoints (chatbot_arena, bigcodebench,
+      //   alpaca_eval all 404 in prod runs as of 2026-06-07). Still callable via
+      //   /admin/sync-all-benchmarks for manual reruns.
+      // - skipRecalculation: orchestrator's tail-end recalc is SKIPPED. Cron A's
+      //   Phase 1 is the only authoritative composite_scores recalc; today's new
+      //   benchmark data lands in tomorrow's Cron A run. Avoids two competing
+      //   recalcs writing different timestamps on the same day.
+      const tScrapers = Date.now();
+      try {
+        const { syncAllBenchmarks } = await import('./db/scrapers/orchestrator');
+        const result = await syncAllBenchmarks(env.SCORE_DB, {
+          skipScrapers: ['chatbot_arena', 'bigcodebench', 'alpaca_eval'],
+          skipRecalculation: true,
+        });
+        const ms = Date.now() - tScrapers;
+        await writeCronHeartbeat(env.CONSENSUS_CACHE, 'scrapers', 'ok', {
+          ms,
+          total_scores_updated: result.total_scores_updated,
+          composite_scores_calculated: result.composite_scores_calculated,
+          errors: result.errors.length,
+        });
+        console.log(
+          `[Cron B] Phase 4: scrapers OK — ${result.total_scores_updated} scores, ` +
+          `${result.composite_scores_calculated} composite. Errors: ${result.errors.length}. (${ms}ms)`
+        );
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        await writeCronHeartbeat(env.CONSENSUS_CACHE, 'scrapers', 'failed', { ms: Date.now() - tScrapers, err: errMsg });
+        console.error(`[Cron B] Phase 4: scrapers FAILED:`, errMsg);
+      }
+
+      const totalB = Date.now() - startB;
+      await writeCronHeartbeat(env.CONSENSUS_CACHE, 'cron_b_run', 'ok', { total_ms: totalB, cron: cronExpr });
+      console.log(`[Cron B] Complete in ${totalB}ms`);
+      return;
     }
 
-    // Phase C — UNCONDITIONAL composite-score recalc.
-    // This runs even if Phase A/B failed, so the rankings page is never more
-    // than 24h stale on the calculation side (benchmark data may be stale,
-    // but the score blend always reflects current models + pricing in D1).
-    try {
-      const { recalculateScores } = await import('./db/score-calculator');
-      await recalculateScores(env.SCORE_DB);
-      console.log('[Cron] Phase C: composite-score recalc OK');
-    } catch (err) {
-      console.error('[Cron] Phase C: recalc FAILED:', err instanceof Error ? err.message : String(err));
-    }
-
-    // Phase D — telemetry flush + route-cache invalidation (best-effort)
-    try {
-      const { RoutingTelemetry } = await import('./router/telemetry');
-      const telemetry = new RoutingTelemetry(env.CONSENSUS_CACHE);
-      await telemetry.flushToD1(env.SCORE_DB);
-
-      const { RouteCache } = await import('./router/route-cache');
-      const routeCache = new RouteCache(env.CONSENSUS_CACHE);
-      await routeCache.invalidateAll();
-      console.log('[Cron] Phase D: telemetry + cache invalidation OK');
-    } catch (err) {
-      console.error('[Cron] Phase D: telemetry/cache FAILED:', err instanceof Error ? err.message : String(err));
-    }
-
-    console.log('[Cron] Pipeline finished');
+    console.warn(`[Cron] Unknown cron expression "${cronExpr}" — no handler defined`);
   }
 };

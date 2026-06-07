@@ -27,7 +27,11 @@
 		}
 	],
 	"triggers": {
-		"crons": ["0 6 * * *"]
+		// Split into two crons (P2 fix 2026-06-07): single cron was timing out
+		// before reaching composite_scores recalc. Cron A handles critical fast
+		// work (recalc + pricing + telemetry). Cron B handles slow scrapers
+		// 30 min later in an isolated execution context.
+		"crons": ["0 6 * * *", "30 6 * * *"]
 	},
 	"vars": {
 		"ENVIRONMENT": "production",
